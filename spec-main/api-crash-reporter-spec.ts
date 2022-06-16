@@ -13,6 +13,8 @@ import * as uuid from 'uuid';
 
 const isWindowsOnArm = process.platform === 'win32' && process.arch === 'arm64';
 const isLinuxOnArm = process.platform === 'linux' && process.arch.includes('arm');
+const isLinuxOnLoongArch =
+    process.platform === 'linux' && process.arch.includes('loong64');
 
 type CrashInfo = {
   prod: string
@@ -137,7 +139,10 @@ function waitForNewFileInDir (dir: string): Promise<string[]> {
 }
 
 // TODO(nornagon): Fix tests on linux/arm.
-ifdescribe(!isLinuxOnArm && !process.mas && !process.env.DISABLE_CRASH_REPORTER_TESTS)('crashReporter module', function () {
+ifdescribe(
+  !isLinuxOnArm && !isLinuxOnLoongArch && !process.mas &&
+    !process.env
+      .DISABLE_CRASH_REPORTER_TESTS)('crashReporter module', function () {
   describe('should send minidump', () => {
     it('when renderer crashes', async () => {
       const { port, waitForCrash } = await startServer();
@@ -158,22 +163,24 @@ ifdescribe(!isLinuxOnArm && !process.mas && !process.env.DISABLE_CRASH_REPORTER_
     // TODO(nornagon): Minidump generation in main/node process on Linux/Arm is
     // broken (//components/crash prints "Failed to generate minidump"). Figure
     // out why.
-    ifit(!isLinuxOnArm)('when main process crashes', async () => {
-      const { port, waitForCrash } = await startServer();
-      runCrashApp('main', port);
-      const crash = await waitForCrash();
-      checkCrash('browser', crash);
-      expect(crash.mainProcessSpecific).to.equal('mps');
-    });
+    ifit(!isLinuxOnArm && !isLinuxOnLoongArch)(
+      'when main process crashes', async () => {
+        const { port, waitForCrash } = await startServer();
+        runCrashApp('main', port);
+        const crash = await waitForCrash();
+        checkCrash('browser', crash);
+        expect(crash.mainProcessSpecific).to.equal('mps');
+      });
 
-    ifit(!isLinuxOnArm)('when a node process crashes', async () => {
-      const { port, waitForCrash } = await startServer();
-      runCrashApp('node', port);
-      const crash = await waitForCrash();
-      checkCrash('node', crash);
-      expect(crash.mainProcessSpecific).to.be.undefined();
-      expect(crash.rendererSpecific).to.be.undefined();
-    });
+    ifit(!isLinuxOnArm && !isLinuxOnLoongArch)(
+      'when a node process crashes', async () => {
+        const { port, waitForCrash } = await startServer();
+        runCrashApp('node', port);
+        const crash = await waitForCrash();
+        checkCrash('node', crash);
+        expect(crash.mainProcessSpecific).to.be.undefined();
+        expect(crash.rendererSpecific).to.be.undefined();
+      });
 
     describe('with guid', () => {
       for (const processType of ['main', 'renderer', 'sandboxed-renderer']) {
@@ -254,9 +261,10 @@ ifdescribe(!isLinuxOnArm && !process.mas && !process.env.DISABLE_CRASH_REPORTER_
     });
   });
 
-  ifdescribe(!isLinuxOnArm)('extra parameter limits', () => {
+  ifdescribe(
+    !isLinuxOnArm && !isLinuxOnLoongArch)('extra parameter limits', () => {
     function stitchLongCrashParam (crash: any, paramKey: string) {
-      if (crash[paramKey]) return crash[paramKey];
+      if (crash[paramKey]) { return crash[paramKey]; }
       let chunk = 1;
       let stitched = '';
       while (crash[`${paramKey}__${chunk}`]) {
@@ -311,12 +319,14 @@ ifdescribe(!isLinuxOnArm && !process.mas && !process.env.DISABLE_CRASH_REPORTER_
   });
 
   describe('globalExtra', () => {
-    ifit(!isLinuxOnArm)('should be sent with main process dumps', async () => {
-      const { port, waitForCrash } = await startServer();
-      runCrashApp('main', port, ['--add-global-param=globalParam:globalValue']);
-      const crash = await waitForCrash();
-      expect(crash.globalParam).to.equal('globalValue');
-    });
+    ifit(!isLinuxOnArm && !isLinuxOnLoongArch)(
+      'should be sent with main process dumps', async () => {
+        const { port, waitForCrash } = await startServer();
+        runCrashApp(
+          'main', port, ['--add-global-param=globalParam:globalValue']);
+        const crash = await waitForCrash();
+        expect(crash.globalParam).to.equal('globalValue');
+      });
 
     it('should be sent with renderer process dumps', async () => {
       const { port, waitForCrash } = await startServer();
@@ -332,19 +342,23 @@ ifdescribe(!isLinuxOnArm && !process.mas && !process.env.DISABLE_CRASH_REPORTER_
       expect(crash.globalParam).to.equal('globalValue');
     });
 
-    ifit(!isLinuxOnArm)('should not be overridden by extra in main process', async () => {
-      const { port, waitForCrash } = await startServer();
-      runCrashApp('main', port, ['--add-global-param=mainProcessSpecific:global']);
-      const crash = await waitForCrash();
-      expect(crash.mainProcessSpecific).to.equal('global');
-    });
+    ifit(!isLinuxOnArm && !isLinuxOnLoongArch)(
+      'should not be overridden by extra in main process', async () => {
+        const { port, waitForCrash } = await startServer();
+        runCrashApp(
+          'main', port, ['--add-global-param=mainProcessSpecific:global']);
+        const crash = await waitForCrash();
+        expect(crash.mainProcessSpecific).to.equal('global');
+      });
 
-    ifit(!isLinuxOnArm)('should not be overridden by extra in renderer process', async () => {
-      const { port, waitForCrash } = await startServer();
-      runCrashApp('main', port, ['--add-global-param=rendererSpecific:global']);
-      const crash = await waitForCrash();
-      expect(crash.rendererSpecific).to.equal('global');
-    });
+    ifit(!isLinuxOnArm && !isLinuxOnLoongArch)(
+      'should not be overridden by extra in renderer process', async () => {
+        const { port, waitForCrash } = await startServer();
+        runCrashApp(
+          'main', port, ['--add-global-param=rendererSpecific:global']);
+        const crash = await waitForCrash();
+        expect(crash.rendererSpecific).to.equal('global');
+      });
   });
 
   // TODO(nornagon): also test crashing main / sandboxed renderers.

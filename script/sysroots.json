@@ -33,5 +33,10 @@
         "Sha1Sum": "0774922d1269947f462bda38c82c4e5e819326ab",
         "SysrootDir": "debian_bullseye_mips64el-sysroot",
         "Tarball": "debian_bullseye_mips64el_sysroot.tar.xz"
+    },
+    "bullseye_loong64": {
+        "Sha1Sum": "0774922d1269947f462bda38c82c4e5e819326ab",
+        "SysrootDir": "debian_bullseye_loong64-sysroot",
+        "Tarball": "debian_bullseye_loong64_sysroot.tar.xz"
     }
 }

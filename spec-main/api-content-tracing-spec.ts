@@ -5,7 +5,7 @@ import * as path from 'path';
 import { ifdescribe, delay } from './spec-helpers';
 
 // FIXME: The tests are skipped on arm/arm64 and ia32.
-ifdescribe(!(['arm', 'arm64', 'ia32'].includes(process.arch)))('contentTracing', () => {
+ifdescribe(!(['arm', 'arm64', 'ia32', 'loong64'].includes(process.arch)))('contentTracing', () => {
   const record = async (options: TraceConfig | TraceCategoriesAndOptions, outputFilePath: string | undefined, recordTimeInMilliseconds = 1e1) => {
     await app.whenReady();
 
