@@ -35,6 +35,12 @@
         "SysrootDir": "debian_bullseye_mips-sysroot",
         "Tarball": "debian_bullseye_mips_sysroot.tar.xz"
     },
+    "bullseye_loong64": {
+        "Key": "20230329T085712Z-0",
+        "Sha1Sum": "1b44b9ddfd3571acc17036866e0373120fd9aa03",
+        "SysrootDir": "debian_bullseye_loong64-sysroot",
+        "Tarball": "debian_bullseye_loong64_sysroot.tar.xz"
+    },
     "bullseye_mips64el": {
         "Key": "20230329T085712Z-0",
         "Sha1Sum": "cd0803ae938dd75247f474feb299bcaa74fa2290",
