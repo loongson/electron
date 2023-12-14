@@ -1,0 +1,20 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Fri, 22 Jul 2022 05:24:40 +0000
+Subject: dawn add support for loongarch64
+
+add DAWN_PLATFORM_IS_64_BIT definition in loongarch64
+
+diff --git a/src/dawn/common/Platform.h b/src/dawn/common/Platform.h
+index 2a8643489f775a204ebaaf90c51b23ece389279c..54211f79d3eee7db5dc1c0a96f1fbfa592060ed2 100644
+--- a/src/dawn/common/Platform.h
++++ b/src/dawn/common/Platform.h
+@@ -68,7 +68,7 @@
+ #endif
+ 
+ #if defined(_WIN64) || defined(__aarch64__) || defined(__x86_64__) || defined(__mips64__) || \
+-    defined(__s390x__) || defined(__PPC64__)
++    defined(__s390x__) || defined(__PPC64__) || defined(__loongarch_lp64)
+ #define DAWN_PLATFORM_IS_64_BIT 1
+ static_assert(sizeof(sizeof(char)) == 8, "Expect sizeof(size_t) == 8");
+ #elif defined(_WIN32) || defined(__arm__) || defined(__i386__) || defined(__mips32__) || \
