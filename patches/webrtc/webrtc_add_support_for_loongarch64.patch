@@ -1,0 +1,22 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: zhoumingtao <zhoumingtao@loongson.com>
+Date: Tue, 22 Feb 2022 08:27:13 +0000
+Subject: webrtc add support for loongarch64
+
+add loongarch64 build configuration
+
+diff --git a/rtc_base/system/arch.h b/rtc_base/system/arch.h
+index be2367b85f14d4cd6a7382d5a4b9fefc3dea29f2..28f378e3f181f365739e3ff9014cb96e36bd2e1d 100644
+--- a/rtc_base/system/arch.h
++++ b/rtc_base/system/arch.h
+@@ -73,6 +73,10 @@
+ #elif defined(__riscv) && __riscv_xlen == 32
+ #define WEBRTC_ARCH_32_BITS
+ #define WEBRTC_ARCH_LITTLE_ENDIAN
++#elif defined(__loongarch_lp64)
++#define WEBRTC_ARCH_LOONG_FAMILY
++#define WEBRTC_ARCH_64_BITS
++#define WEBRTC_ARCH_LITTLE_ENDIAN
+ #elif defined(__pnacl__)
+ #define WEBRTC_ARCH_32_BITS
+ #define WEBRTC_ARCH_LITTLE_ENDIAN
