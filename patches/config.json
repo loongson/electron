@@ -27,5 +27,13 @@
 
   "src/electron/patches/libaom": "src/third_party/libaom/source/libaom",
 
-  "src/electron/patches/pdfium": "src/third_party/pdfium"
+  "src/electron/patches/pdfium": "src/third_party/pdfium",
+
+  "src/electron/patches/breakpad": "src/third_party/breakpad/breakpad",
+
+  "src/electron/patches/dawn": "src/third_party/dawn",
+
+  "src/electron/patches/lss": "src/third_party/lss",
+
+  "src/electron/patches/swiftshader": "src/third_party/swiftshader"
 }
