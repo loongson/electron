@@ -25,5 +25,15 @@
 
   "src/electron/patches/skia": "src/third_party/skia",
 
-  "src/electron/patches/libaom": "src/third_party/libaom/source/libaom"
+  "src/electron/patches/libaom": "src/third_party/libaom/source/libaom",
+
+  "src/electron/patches/breakpad": "src/third_party/breakpad/breakpad",
+
+  "src/electron/patches/ffmpeg": "src/third_party/ffmpeg",
+
+  "src/electron/patches/dawn": "src/third_party/dawn",
+
+  "src/electron/patches/lss": "src/third_party/lss",
+
+  "src/electron/patches/swiftshader": "src/third_party/swiftshader"
 }
