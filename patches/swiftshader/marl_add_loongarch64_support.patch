@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: zhoumingtao <zhoumingtao@loongson.com>
+Date: Fri, 29 Apr 2022 03:45:20 +0000
+Subject: marl add loongarch64 support
+
+provided by wujiahuan
+https://github.com/google/marl/commit/24955870add58198f7a666e7f948ce2f262fcf56
+
+diff --git a/third_party/marl/BUILD.gn b/third_party/marl/BUILD.gn
+index 0de8e83c968ebca70c47dc98e0357d1158ee04aa..4521982664642b7ea23fb0cd38cc29afd1bb00de 100644
+--- a/third_party/marl/BUILD.gn
++++ b/third_party/marl/BUILD.gn
+@@ -74,6 +74,12 @@ swiftshader_source_set("Marl") {
+         "src/osfiber_asm_mips64.h",
+         "src/osfiber_asm_mips64.S",
+       ]
++    } else if (current_cpu == "loong64") {
++      sources += [
++        "src/osfiber_loongarch64.c",
++        "src/osfiber_asm_loongarch64.h",
++        "src/osfiber_asm_loongarch64.S",
++      ]
+     } else if (current_cpu == "ppc64") {
+       sources += [
+         "src/osfiber_ppc64.c",
