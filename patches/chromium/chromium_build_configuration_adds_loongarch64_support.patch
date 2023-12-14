@@ -1,0 +1,209 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Mon, 6 Jun 2022 06:47:18 +0000
+Subject: Chromium build configuration adds loongarch64 support
+
+add loongarch64 support for build configuration
+add loongarch64 support for breakpad, dav1d, libvpx, pfft in third_party
+
+diff --git a/build/config/compiler/BUILD.gn b/build/config/compiler/BUILD.gn
+index df8610696cc6ed7c334a81058802d3136e07b6b4..19cddca220ee6ba935763bf47378d16fdc6953fb 100644
+--- a/build/config/compiler/BUILD.gn
++++ b/build/config/compiler/BUILD.gn
+@@ -931,6 +931,15 @@ config("compiler_cpu_abi") {
+         # Outline atomics crash on Exynos 9810. http://crbug.com/1272795
+         cflags += [ "-mno-outline-atomics" ]
+       }
++    } else if (current_cpu == "loong64") {
++      cflags += [
++        "-mabi=lp64d",
++        "-mcmodel=medium",
++       ]
++      if (is_clang && !is_android && !is_nacl && !is_fuchsia) {
++        cflags += [ "--target=loongarch64-redhat-linux" ]
++        ldflags += [ "--target=loongarch64-redhat-linux" ]
++      }
+     } else if (current_cpu == "mipsel" && !is_nacl) {
+       ldflags += [ "-Wl,--hash-style=sysv" ]
+       if (custom_toolchain == "") {
+diff --git a/build/config/sysroot.gni b/build/config/sysroot.gni
+index cbcf0a3f09615fc35a4b1d933736448155a5d9a8..96cf7ae92e6ec3d1600452c22d62b4b39c470926 100644
+--- a/build/config/sysroot.gni
++++ b/build/config/sysroot.gni
+@@ -23,7 +23,8 @@ declare_args() {
+   # is empty, default sysroot is calculated.
+   use_sysroot = current_cpu == "x86" || current_cpu == "x64" ||
+                 current_cpu == "arm" || current_cpu == "arm64" ||
+-                current_cpu == "mipsel" || current_cpu == "mips64el"
++                current_cpu == "mipsel" || current_cpu == "mips64el" ||
++                current_cpu == "loong64"
+ }
+ 
+ if (sysroot == "") {
+@@ -50,6 +51,8 @@ if (sysroot == "") {
+       sysroot = "$target_sysroot_dir/debian_bullseye_arm-sysroot"
+     } else if (current_cpu == "arm64") {
+       sysroot = "$target_sysroot_dir/debian_bullseye_arm64-sysroot"
++    } else if (current_cpu == "loong64") {
++      sysroot = "$target_sysroot_dir/debian_bullseye_loong64-sysroot"
+     } else {
+       assert(false, "No linux sysroot for cpu: $target_cpu")
+     }
+diff --git a/build/linux/sysroot_scripts/install-sysroot.py b/build/linux/sysroot_scripts/install-sysroot.py
+index 74140d29ed56ce54e39940e7bffa3778db983f27..a008d10e7d93bede73d0484be606799a1e06cc9b 100755
+--- a/build/linux/sysroot_scripts/install-sysroot.py
++++ b/build/linux/sysroot_scripts/install-sysroot.py
+@@ -47,13 +47,14 @@ SYSTOORS_CONFIG_DIR = os.path.join(SRC_DIR, 'electron', 'script')
+ URL_PREFIX = 'https://dev-cdn.electronjs.org'
+ URL_PATH = 'linux-sysroots'
+ 
+-VALID_ARCHS = ('arm', 'arm64', 'i386', 'amd64', 'mips', 'mips64el')
++VALID_ARCHS = ('arm', 'arm64', 'i386', 'amd64', 'mips', 'mips64el', 'loong64')
+ 
+ ARCH_TRANSLATIONS = {
+     'x64': 'amd64',
+     'x86': 'i386',
+     'mipsel': 'mips',
+     'mips64': 'mips64el',
++    'loongarch64': 'loong64',
+ }
+ 
+ DEFAULT_TARGET_PLATFORM = 'bullseye'
+diff --git a/build/linux/sysroot_scripts/sysroots.json b/build/linux/sysroot_scripts/sysroots.json
+index e851f4229cc3231418a785a112932468f32be415..3300e1d25da785d74d14268c8fbc82e81dce9f6b 100644
+--- a/build/linux/sysroot_scripts/sysroots.json
++++ b/build/linux/sysroot_scripts/sysroots.json
+@@ -33,5 +33,10 @@
+         "Sha1Sum": "3cfc9e7fe2d0cad3873bbce8fc3ffde510ed5638",
+         "SysrootDir": "debian_bullseye_mips64el-sysroot",
+         "Tarball": "debian_bullseye_mips64el_sysroot.tar.xz"
++    },
++    "bullseye_loong64": {
++        "Sha1Sum": "3cfc9e7fe2d0cad3873bbce8fc3ffde510ed5638",
++        "SysrootDir": "debian_bullseye_loong64-sysroot",
++        "Tarball": "debian_bullseye_loong64_sysroot.tar.xz"
+     }
+ }
+diff --git a/third_party/breakpad/BUILD.gn b/third_party/breakpad/BUILD.gn
+index 2df7b35f3e27680410654738f9ca2f2924bc2148..30842f6d4a55fd8e00f16d324f99b73583e203f7 100644
+--- a/third_party/breakpad/BUILD.gn
++++ b/third_party/breakpad/BUILD.gn
+@@ -118,6 +118,8 @@ if (!is_win) {
+         "breakpad/src/processor/stackwalker_arm.h",
+         "breakpad/src/processor/stackwalker_arm64.cc",
+         "breakpad/src/processor/stackwalker_arm64.h",
++        "breakpad/src/processor/stackwalker_loongarch64.cc",
++        "breakpad/src/processor/stackwalker_loongarch64.h",
+         "breakpad/src/processor/stackwalker_mips.cc",
+         "breakpad/src/processor/stackwalker_mips.h",
+         "breakpad/src/processor/stackwalker_ppc.cc",
+diff --git a/third_party/dav1d/config/linux/loong64/config.h b/third_party/dav1d/config/linux/loong64/config.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..5cf46d6c4f45a835810a5deab2024f42e7b43d12
+--- /dev/null
++++ b/third_party/dav1d/config/linux/loong64/config.h
+@@ -0,0 +1,44 @@
++/*
++ * Autogenerated by the Meson build system.
++ * Do not edit, your changes will be lost.
++ */
++
++#pragma once
++
++#define ARCH_LOONG64 1
++
++#define ARCH_AARCH64 0
++
++#define ARCH_ARM 0
++
++#define ARCH_PPC64LE 0
++
++#define ARCH_X86 0
++
++#define ARCH_X86_32 0
++
++#define ARCH_X86_64 0
++
++#define CONFIG_16BPC 1
++
++#define CONFIG_8BPC 1
++
++// #define CONFIG_LOG 1 -- Logging is controlled by Chromium
++
++#define ENDIANNESS_BIG 0
++
++#define HAVE_ASM 1
++
++#define HAVE_AS_FUNC 0
++
++#define HAVE_CLOCK_GETTIME 1
++
++#define HAVE_DLSYM 1
++
++#define HAVE_GETAUXVAL 1
++
++#define HAVE_POSIX_MEMALIGN 1
++
++// #define HAVE_PTHREAD_GETAFFINITY_NP 1 -- Controlled by Chomium
++
++#define HAVE_UNISTD_H 1
+diff --git a/third_party/libaom/BUILD.gn b/third_party/libaom/BUILD.gn
+index 49dbee305c6d5637174531804c6cdbc5ed0fd9cb..adfaca9ec77eecc84dea18e5fe458e5c411ed88a 100644
+--- a/third_party/libaom/BUILD.gn
++++ b/third_party/libaom/BUILD.gn
+@@ -36,6 +36,8 @@ if (current_cpu == "x86") {
+   } else {
+     cpu_arch_full = "arm"
+   }
++} else if (current_cpu == "loong64") {
++    cpu_arch_full = "generic"
+ } else {
+   cpu_arch_full = current_cpu
+ }
+diff --git a/third_party/libgav1/options.gni b/third_party/libgav1/options.gni
+index 5e0fe7ea3e09010135ed675f0bbee6dc8ab5c509..f00266d3ff3c4c2272e51b9fee8780fbe22c450e 100644
+--- a/third_party/libgav1/options.gni
++++ b/third_party/libgav1/options.gni
+@@ -13,5 +13,6 @@ declare_args() {
+   use_libgav1_parser =
+       (is_chromeos || is_linux || is_win) &&
+       (target_cpu == "x86" || target_cpu == "x64" ||
+-      target_cpu == "arm64" || target_cpu == "ppc64")
++      target_cpu == "arm64" || target_cpu == "ppc64" ||
++      target_cpu == "loong64")
+ }
+diff --git a/third_party/libvpx/BUILD.gn b/third_party/libvpx/BUILD.gn
+index a972e1f18b700eace1b14cb94dc64cb7e419041e..69c796e033d435d05d07d077c0814cc738cc46f6 100644
+--- a/third_party/libvpx/BUILD.gn
++++ b/third_party/libvpx/BUILD.gn
+@@ -35,6 +35,8 @@ if (current_cpu == "x86") {
+   } else {
+     cpu_arch_full = current_cpu
+   }
++} else if (current_cpu == "loong64") {
++  cpu_arch_full = "generic"
+ } else {
+   cpu_arch_full = current_cpu
+ }
+@@ -401,6 +403,8 @@ static_library("libvpx") {
+     }
+   } else if (current_cpu == "ppc64") {
+     sources = libvpx_srcs_ppc64
++  } else if (current_cpu == "loong64") {
++    sources = libvpx_srcs_generic
+   }
+ 
+   configs -= [ "//build/config/compiler:chromium_code" ]
+diff --git a/third_party/pffft/BUILD.gn b/third_party/pffft/BUILD.gn
+index 0a1cf7a1f5e164013b47551d4822393d63f2884f..928b2127d80d156bf7edd3f49551bb42b478f474 100644
+--- a/third_party/pffft/BUILD.gn
++++ b/third_party/pffft/BUILD.gn
+@@ -19,7 +19,7 @@ config("common_config") {
+   # PFFFT doesn't support SIMD on some cpus, so build a scalar version.
+   if ((current_cpu == "arm" && !arm_use_neon) || current_cpu == "mipsel" ||
+       current_cpu == "mips64el" || current_cpu == "ppc64" ||
+-      current_cpu == "s390x") {
++      current_cpu == "s390x" || current_cpu == "loong64") {
+     defines = [ "PFFFT_SIMD_DISABLE" ]
+   }
+ }

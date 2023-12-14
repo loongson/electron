@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: zhoumingtao <zhoumingtao@loongson.com>
+Date: Mon, 16 May 2022 11:32:37 +0000
+Subject: fix "ERROR:gbm_wrapper.cc(275)] Failed to export buffer to dma_buf"
+
+https://bugs.chromium.org/p/chromium/issues/detail?id=1293439
+
+diff --git a/gpu/ipc/service/gpu_memory_buffer_factory_native_pixmap.cc b/gpu/ipc/service/gpu_memory_buffer_factory_native_pixmap.cc
+index 33d1d8578ced1bc8674337a7466f281eab5ab603..31a178da0fa1302a7d7569862d68d86062e00130 100644
+--- a/gpu/ipc/service/gpu_memory_buffer_factory_native_pixmap.cc
++++ b/gpu/ipc/service/gpu_memory_buffer_factory_native_pixmap.cc
+@@ -177,9 +177,13 @@ GpuMemoryBufferFactoryNativePixmap::CreateImageForGpuMemoryBuffer(
+ 
+ bool GpuMemoryBufferFactoryNativePixmap::SupportsCreateAnonymousImage() const {
+   // Platforms may not support native pixmaps.
++#if defined(__loongarch_lp64)
++  return true;
++#else
+   return ui::OzonePlatform::GetInstance()
+       ->GetPlatformRuntimeProperties()
+       .supports_native_pixmaps;
++#endif
+ }
+ 
+ scoped_refptr<gl::GLImage>

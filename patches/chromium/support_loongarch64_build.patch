@@ -1,0 +1,52 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Thu, 14 Dec 2023 03:16:36 +0000
+Subject: support loongarch64 build
+
+using sysroot form https://mirrors.wsyu.edu.cn/fedora/linux/Yongbao/chromium-sysroot/
+using llvm 16.0.6 from https://github.com/llvm/llvm-project
+
+diff --git a/build/config/linux/pkg-config.py b/build/config/linux/pkg-config.py
+index 5adf70cc3bb37be491a614841186b37c1f81a90b..9074496af452df38dce3d1155ca94ee323ef8858 100755
+--- a/build/config/linux/pkg-config.py
++++ b/build/config/linux/pkg-config.py
+@@ -59,7 +59,10 @@ def SetConfigPath(options):
+     print("You must specify an architecture via -a if using a sysroot.")
+     sys.exit(1)
+ 
+-  libdir = sysroot + '/usr/' + options.system_libdir + '/pkgconfig'
++  if arch == 'loong64':
++    libdir = sysroot + '/usr/' + 'lib64' + '/pkgconfig'
++  else:
++    libdir = sysroot + '/usr/' + options.system_libdir + '/pkgconfig'
+   libdir += ':' + sysroot + '/usr/share/pkgconfig'
+   os.environ['PKG_CONFIG_LIBDIR'] = libdir
+   return libdir
+diff --git a/third_party/closure_compiler/compiler.py b/third_party/closure_compiler/compiler.py
+index f09b7dd7a0ced08e7722bc324f331c4f53bede33..de90fc45c40b93b6ac86a7ebbb634ad33543f777 100755
+--- a/third_party/closure_compiler/compiler.py
++++ b/third_party/closure_compiler/compiler.py
+@@ -13,8 +13,9 @@ import subprocess
+ 
+ 
+ _CURRENT_DIR = os.path.join(os.path.dirname(__file__))
+-_JAVA_PATH = os.path.join(_CURRENT_DIR, "..", "jdk", "current", "bin", "java")
+-assert os.path.isfile(_JAVA_PATH), "java only allowed in android builds"
++_JAVA_BIN = "java"
++_JDK_PATH = os.path.join(_CURRENT_DIR, "..", "jdk", "current", "bin", _JAVA_BIN)
++_JAVA_PATH = _JDK_PATH if os.path.isfile(_JDK_PATH) else _JAVA_BIN
+ 
+ class Compiler(object):
+   """Runs the Closure compiler on given source files to typecheck them
+diff --git a/third_party/crashpad/crashpad/handler/BUILD.gn b/third_party/crashpad/crashpad/handler/BUILD.gn
+index 7f5405993faa67bc1e09a7520ab8df0257ce870b..dbca77575ee46c09104899e9a98feba39031159b 100644
+--- a/third_party/crashpad/crashpad/handler/BUILD.gn
++++ b/third_party/crashpad/crashpad/handler/BUILD.gn
+@@ -159,7 +159,6 @@ if (!crashpad_is_ios) {
+     sources = [ "main.cc" ]
+ 
+     deps = [
+-      "//crypto:platform",
+       ":handler",
+       "../build:default_exe_manifest_win",
+       "../compat",
