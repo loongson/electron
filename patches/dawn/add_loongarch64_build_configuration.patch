@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Fri, 15 Dec 2023 06:43:00 +0000
+Subject: add loongarch64 build configuration
+
+
+diff --git a/src/dawn/common/Assert.cpp b/src/dawn/common/Assert.cpp
+index 1793bacca868825752d4df22ec3e6c212084b757..221ee22a90e7f1f45f1b832f4dcd9d15fea7ec07 100644
+--- a/src/dawn/common/Assert.cpp
++++ b/src/dawn/common/Assert.cpp
+@@ -28,7 +28,7 @@ void BreakPoint() {
+ #elif DAWN_PLATFORM_IS(ARM64)
+     __asm__ __volatile__("brk 0");
+ #elif DAWN_PLATFORM_IS(LOONGARCH)
+-    __asm__ __volatile__("break");
++    __asm__ __volatile__("break 0");
+ #elif DAWN_PLATFORM_IS(RISCV)
+     __asm__ __volatile__("ebreak");
+ #elif DAWN_PLATFORM_IS(MIPS)
+diff --git a/src/dawn/common/Platform.h b/src/dawn/common/Platform.h
+index e49fc4ff1eaf52dd5cc2b33494789037664c3467..42cc264b6a7079da879d7f7bef10e0f4f60255ca 100644
+--- a/src/dawn/common/Platform.h
++++ b/src/dawn/common/Platform.h
+@@ -113,7 +113,7 @@
+ 
+ #elif defined(__loongarch__)
+ #define DAWN_PLATFORM_IS_LOONGARCH 1
+-#if _LOONGARCH_SIM == _ABILP32
++#if defined(__loongarch_lp32)
+ #define DAWN_PLATFORM_IS_LOONGARCH32 1
+ #else
+ #define DAWN_PLATFORM_IS_LOONGARCH64 1
