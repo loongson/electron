@@ -1,0 +1,149 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Thu, 23 Feb 2023 12:08:27 +0000
+Subject: Chromium add support for loongarch64
+
+
+diff --git a/chrome/browser/extensions/api/runtime/chrome_runtime_api_delegate.cc b/chrome/browser/extensions/api/runtime/chrome_runtime_api_delegate.cc
+index 8e3bdd4a0d88d87428da544513d6b7ca1625f543..c431bd961ecc85f8c35f9ef9cb12773de5a8418e 100644
+--- a/chrome/browser/extensions/api/runtime/chrome_runtime_api_delegate.cc
++++ b/chrome/browser/extensions/api/runtime/chrome_runtime_api_delegate.cc
+@@ -311,6 +311,8 @@ bool ChromeRuntimeAPIDelegate::GetPlatformInfo(PlatformInfo* info) {
+     info->arch = extensions::api::runtime::PLATFORM_ARCH_MIPS;
+   } else if (strcmp(arch, "mips64el") == 0) {
+     info->arch = extensions::api::runtime::PLATFORM_ARCH_MIPS64;
++  } else if (strcmp(arch, "loong64") == 0) {
++    info->arch = extensions::api::runtime::PLATFORM_ARCH_LOONG64;
+   } else {
+     NOTREACHED();
+     return false;
+@@ -327,6 +329,8 @@ bool ChromeRuntimeAPIDelegate::GetPlatformInfo(PlatformInfo* info) {
+     info->nacl_arch = extensions::api::runtime::PLATFORM_NACL_ARCH_MIPS;
+   } else if (strcmp(nacl_arch, "mips64") == 0) {
+     info->nacl_arch = extensions::api::runtime::PLATFORM_NACL_ARCH_MIPS64;
++  } else if (strcmp(nacl_arch, "loong64") == 0) {
++    info->nacl_arch = extensions::api::runtime::PLATFORM_NACL_ARCH_LOONG64;
+   } else {
+     NOTREACHED();
+     return false;
+diff --git a/chrome/installer/linux/debian/calculate_package_deps.py b/chrome/installer/linux/debian/calculate_package_deps.py
+index e6e88a9159c5762adb473fde96b5ac34a6c32d16..d68bfc06414d62abd66baa3a904646f620ac696d 100755
+--- a/chrome/installer/linux/debian/calculate_package_deps.py
++++ b/chrome/installer/linux/debian/calculate_package_deps.py
+@@ -56,6 +56,9 @@ elif arch == 'mipsel':
+ elif arch == 'mips64el':
+   cmd.extend(['-l%s/usr/lib/mips64el-linux-gnuabi64' % sysroot,
+               '-l%s/lib/mips64el-linux-gnuabi64' % sysroot])
++elif arch == 'loong64':
++  cmd.extend(['-l%s/usr/lib/loongarch64-linux-gnu' % sysroot,
++              '-l%s/lib/loongarch64-linux-gnu' % sysroot])
+ else:
+   print('Unsupported architecture ' + arch)
+   sys.exit(1)
+diff --git a/extensions/common/api/runtime.json b/extensions/common/api/runtime.json
+index 5fdf15bbcbe7dcfd07a64d5becde30e41ba1a1db..f96b684c1462ea92c43e0325428afa0604ce1807 100644
+--- a/extensions/common/api/runtime.json
++++ b/extensions/common/api/runtime.json
+@@ -92,14 +92,14 @@
+       {
+         "id": "PlatformArch",
+         "type": "string",
+-        "enum": ["arm", "arm64", "x86-32", "x86-64", "mips", "mips64"],
++        "enum": ["arm", "arm64", "x86-32", "x86-64", "mips", "mips64", "loong64"],
+         "description": "The machine's processor architecture."
+       },
+       {
+         "id": "PlatformNaclArch",
+         "description": "The native client architecture. This may be different from arch on some platforms.",
+         "type": "string",
+-        "enum": ["arm", "x86-32", "x86-64", "mips", "mips64"]
++        "enum": ["arm", "x86-32", "x86-64", "mips", "mips64", "loong64"]
+       },
+       {
+         "id": "PlatformInfo",
+diff --git a/gpu/ipc/service/gpu_memory_buffer_factory_native_pixmap.cc b/gpu/ipc/service/gpu_memory_buffer_factory_native_pixmap.cc
+index 19a89d756fb1bdcf941bec3e7864f6878fa64f09..3fd0e483a20fa658ddb74addd9c6a30516b431df 100644
+--- a/gpu/ipc/service/gpu_memory_buffer_factory_native_pixmap.cc
++++ b/gpu/ipc/service/gpu_memory_buffer_factory_native_pixmap.cc
+@@ -181,9 +181,13 @@ GpuMemoryBufferFactoryNativePixmap::CreateImageForGpuMemoryBuffer(
+ 
+ bool GpuMemoryBufferFactoryNativePixmap::SupportsCreateAnonymousImage() const {
+   // Platforms may not support native pixmaps.
++#if defined(__loongarch_lp64)
++  return true;
++#else
+   return ui::OzonePlatform::GetInstance()
+       ->GetPlatformRuntimeProperties()
+       .supports_native_pixmaps;
++#endif
+ }
+ 
+ scoped_refptr<gl::GLImage>
+diff --git a/net/base/address_tracker_linux.cc b/net/base/address_tracker_linux.cc
+index 242f40f543d2833c47b4ccac376c3a016a4f4642..a9bd225eca753b89611a88650b05ec5adb7efc53 100644
+--- a/net/base/address_tracker_linux.cc
++++ b/net/base/address_tracker_linux.cc
+@@ -323,7 +323,11 @@ void AddressTrackerLinux::ReadMessages(bool* address_changed,
+   *address_changed = false;
+   *link_changed = false;
+   *tunnel_changed = false;
++#if defined(__loongarch_lp64)
++  char buffer[16384];
++#else
+   char buffer[4096];
++#endif
+   bool first_loop = true;
+   {
+     absl::optional<base::ScopedBlockingCall> blocking_call;
+diff --git a/skia/BUILD.gn b/skia/BUILD.gn
+index edc61a93bb7a1cae1324c101e2d38ef15d42f269..01ca83b3dd3836f05cfdb24564ce934db9c006c9 100644
+--- a/skia/BUILD.gn
++++ b/skia/BUILD.gn
+@@ -757,6 +757,8 @@ skia_source_set("skia_opts") {
+     # Conditional and empty body needed to avoid assert() below.
+   } else if (current_cpu == "riscv64") {
+     # Conditional and empty body needed to avoid assert() below.
++  } else if (current_cpu == "loong64") {
++    # Conditional and empty body needed to avoid assert() below.
+   } else {
+     assert(false, "Unknown cpu target")
+   }
+diff --git a/third_party/protobuf/src/google/protobuf/port_def.inc b/third_party/protobuf/src/google/protobuf/port_def.inc
+index c0b76ffcf3f290f7a99c9e6553b06f1272c8069c..f5c0fa79c4f855369176de74a27cb6f305054230 100644
+--- a/third_party/protobuf/src/google/protobuf/port_def.inc
++++ b/third_party/protobuf/src/google/protobuf/port_def.inc
+@@ -235,7 +235,7 @@
+ #endif
+ #if __has_cpp_attribute(clang::musttail) && !defined(__arm__) && \
+     !defined(_ARCH_PPC) && !defined(__wasm__) &&                 \
+-    !(defined(_MSC_VER) && defined(_M_IX86))
++    !(defined(_MSC_VER) && defined(_M_IX86)) && !defined(__loongarch__)
+ #  ifndef PROTO2_OPENSOURCE
+ // Compilation fails on ARM32: b/195943306
+ // Compilation fails on powerpc64le: b/187985113
+diff --git a/ui/gfx/linux/drm_util_linux.cc b/ui/gfx/linux/drm_util_linux.cc
+index ed992d948ffd84e2699026dc8b8dba1d06382380..5ac9be3dcd74b64286091d82664b94ab442a15bb 100644
+--- a/ui/gfx/linux/drm_util_linux.cc
++++ b/ui/gfx/linux/drm_util_linux.cc
+@@ -8,6 +8,10 @@
+ 
+ #include "base/notreached.h"
+ 
++#ifndef DRM_FORMAT_P010
++#define DRM_FORMAT_P010 fourcc_code('P', '0', '1', '0')
++#endif
++
+ namespace ui {
+ 
+ int GetFourCCFormatFromBufferFormat(gfx::BufferFormat format) {
+diff --git a/ui/gl/features.gni b/ui/gl/features.gni
+index c950e87c6a40384b58e8811f816114202cf5c1cf..224170da8aea7dbe5ad4f3bccb2fcbb1058930e0 100644
+--- a/ui/gl/features.gni
++++ b/ui/gl/features.gni
+@@ -33,5 +33,5 @@ declare_args() {
+        is_chromeos_ash || is_fuchsia) &&
+       (target_cpu == "x86" || target_cpu == "x64" || target_cpu == "arm" ||
+        target_cpu == "arm64" || target_cpu == "mipsel" ||
+-       target_cpu == "mips64el" || target_cpu == "riscv64")
++       target_cpu == "mips64el" || target_cpu == "riscv64" || target_cpu == "loong64")
+ }
