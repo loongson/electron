@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Fri, 15 Dec 2023 03:37:50 +0000
+Subject: [loong64] fix build configuration
+
+
+diff --git a/include/v8config.h b/include/v8config.h
+index 9cedeff64478d900bc6730537caff16f09dcfd46..14e00586047e30c2cc0260b0c46fae1ed0ab8596 100644
+--- a/include/v8config.h
++++ b/include/v8config.h
+@@ -728,6 +728,8 @@ V8 shared library set USING_V8_SHARED.
+ #elif __riscv_xlen == 32
+ #define V8_TARGET_ARCH_RISCV32 1
+ #endif
++#elif defined(__loongarch64)
++#define V8_TARGET_ARCH_LOONG64 1
+ #else
+ #error Target architecture was not detected as supported by v8
+ #endif

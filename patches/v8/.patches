@@ -16,3 +16,4 @@ cherry-pick-28b9c1c04e78.patch
 cherry-pick-aeceeb2187a6.patch
 cherry-pick-f6ddbf42b1ea.patch
 cherry-pick-546e00df97ac.patch
+loong64_fix_build_configuration.patch
