@@ -1,0 +1,22 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Sat, 8 Oct 2022 03:45:40 +0000
+Subject: fix navigator.onLine unable to get network status
+
+
+diff --git a/net/base/address_tracker_linux.cc b/net/base/address_tracker_linux.cc
+index d1a77c6d3ed82a59c93697f24d093b45a50d69a5..1610505da3e5978817e023dcc212bdef34daa132 100644
+--- a/net/base/address_tracker_linux.cc
++++ b/net/base/address_tracker_linux.cc
+@@ -323,7 +323,11 @@ void AddressTrackerLinux::ReadMessages(bool* address_changed,
+   *address_changed = false;
+   *link_changed = false;
+   *tunnel_changed = false;
++#if defined(__loongarch_lp64)
++  char buffer[16384];
++#else
+   char buffer[4096];
++#endif
+   bool first_loop = true;
+   {
+     absl::optional<base::ScopedBlockingCall> blocking_call;
