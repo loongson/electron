@@ -1,0 +1,21 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: zhoumingtao <zhoumingtao@loongson.com>
+Date: Tue, 22 Feb 2022 07:48:39 +0000
+Subject: boringssl add support for loongarch64
+
+add loongarch64 build configuration
+
+diff --git a/include/openssl/base.h b/include/openssl/base.h
+index 1e7da873fd7fc74f2d9e841a409109bca638d8f5..3343a9b69d7e47a858f1e37316e809adecd4c27c 100644
+--- a/include/openssl/base.h
++++ b/include/openssl/base.h
+@@ -109,6 +109,9 @@ extern "C" {
+ #define OPENSSL_64_BIT
+ #elif defined(__riscv) && __SIZEOF_POINTER__ == 4
+ #define OPENSSL_32_BIT
++#elif defined(__loongarch_lp64)
++#define OPENSSL_64_BIT
++#define OPENSSL_LOONG64
+ #elif defined(__pnacl__)
+ #define OPENSSL_32_BIT
+ #define OPENSSL_PNACL
