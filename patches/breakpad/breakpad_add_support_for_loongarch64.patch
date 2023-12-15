@@ -1,0 +1,2997 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Fri, 15 Dec 2023 02:17:46 +0000
+Subject: breakpad add support for LoongArch64
+
+support ABI2.0
+
+diff --git a/Makefile.am b/Makefile.am
+index 514a7ff4d9557b88dcfbbb322b6ff9a8c2d3c8b9..f2d597feff5db888e4ab2ef285a0e67cea0e6622 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -293,6 +293,8 @@ src_libbreakpad_a_SOURCES = \
+ 	src/processor/stackwalker_address_list.h \
+ 	src/processor/stackwalker_mips.cc \
+ 	src/processor/stackwalker_mips.h \
++	src/processor/stackwalker_loongarch64.cc \
++	src/processor/stackwalker_loongarch64.h \
+ 	src/processor/stackwalker_ppc.cc \
+ 	src/processor/stackwalker_ppc.h \
+ 	src/processor/stackwalker_ppc64.cc \
+@@ -410,6 +412,7 @@ check_PROGRAMS += \
+ 	src/processor/stackwalker_address_list_unittest \
+ 	src/processor/stackwalker_mips_unittest \
+ 	src/processor/stackwalker_mips64_unittest \
++	src/processor/stackwalker_loongarch64_unittest \
+ 	src/processor/stackwalker_x86_unittest \
+ 	src/processor/synth_minidump_unittest
+ endif
+@@ -892,6 +895,7 @@ src_processor_exploitability_unittest_LDADD = \
+ 	src/processor/stackwalker_arm.o \
+ 	src/processor/stackwalker_arm64.o \
+ 	src/processor/stackwalker_mips.o \
++	src/processor/stackwalker_loongarch64.o \
+ 	src/processor/stackwalker_ppc.o \
+ 	src/processor/stackwalker_ppc64.o \
+ 	src/processor/stackwalker_sparc.o \
+@@ -965,6 +969,7 @@ src_processor_microdump_processor_unittest_LDADD = \
+ 	src/processor/stackwalker_arm.o \
+ 	src/processor/stackwalker_arm64.o \
+ 	src/processor/stackwalker_mips.o \
++	src/processor/stackwalker_loongarch64.o \
+ 	src/processor/stackwalker_ppc.o \
+ 	src/processor/stackwalker_ppc64.o \
+ 	src/processor/stackwalker_sparc.o \
+@@ -1004,6 +1009,7 @@ src_processor_minidump_processor_unittest_LDADD = \
+ 	src/processor/stackwalker_arm.o \
+ 	src/processor/stackwalker_arm64.o \
+ 	src/processor/stackwalker_mips.o \
++	src/processor/stackwalker_loongarch64.o \
+ 	src/processor/stackwalker_ppc.o \
+ 	src/processor/stackwalker_ppc64.o \
+ 	src/processor/stackwalker_sparc.o \
+@@ -1147,6 +1153,7 @@ src_processor_stackwalker_selftest_LDADD = \
+ 	src/processor/stackwalker_arm.o \
+ 	src/processor/stackwalker_arm64.o \
+ 	src/processor/stackwalker_mips.o \
++	src/processor/stackwalker_loongarch64.o \
+ 	src/processor/stackwalker_ppc.o \
+ 	src/processor/stackwalker_ppc64.o \
+ 	src/processor/stackwalker_sparc.o \
+@@ -1214,6 +1221,16 @@ src_processor_stackwalker_mips64_unittest_LDADD = \
+ src_processor_stackwalker_mips64_unittest_CPPFLAGS = \
+ 	$(AM_CPPFLAGS) $(TEST_CFLAGS)
+ 
++src_processor_stackwalker_loongarch64_unittest_SOURCES = \
++	src/common/test_assembler.cc \
++	src/processor/stackwalker_loongarch64_unittest.cc
++src_processor_stackwalker_loongarch64_unittest_LDADD = \
++	src/libbreakpad.a \
++	$(TEST_LIBS) \
++	$(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
++src_processor_stackwalker_loongarch64_unittest_CPPFLAGS = \
++	$(AM_CPPFLAGS) $(TEST_CFLAGS)
++
+ src_processor_stackwalker_x86_unittest_SOURCES = \
+ 	src/common/test_assembler.cc \
+ 	src/processor/stackwalker_x86_unittest.cc
+@@ -1315,6 +1332,7 @@ src_processor_microdump_stackwalk_LDADD = \
+ 	src/processor/stackwalker_arm.o \
+ 	src/processor/stackwalker_arm64.o \
+ 	src/processor/stackwalker_mips.o \
++	src/processor/stackwalker_loongarch64.o \
+ 	src/processor/stackwalker_ppc.o \
+ 	src/processor/stackwalker_ppc64.o \
+ 	src/processor/stackwalker_sparc.o \
+@@ -1354,6 +1372,7 @@ src_processor_minidump_stackwalk_LDADD = \
+ 	src/processor/stackwalker_arm.o \
+ 	src/processor/stackwalker_arm64.o \
+ 	src/processor/stackwalker_mips.o \
++	src/processor/stackwalker_loongarch64.o \
+ 	src/processor/stackwalker_ppc.o \
+ 	src/processor/stackwalker_ppc64.o \
+ 	src/processor/stackwalker_sparc.o \
+@@ -1479,6 +1498,7 @@ EXTRA_DIST = \
+ 	src/processor/testdata/microdump-arm.dmp \
+ 	src/processor/testdata/microdump-mips32.dmp \
+ 	src/processor/testdata/microdump-mips64.dmp \
++	src/processor/testdata/microdump-loongarch64.dmp \
+ 	src/processor/testdata/microdump-multiple.dmp \
+ 	src/processor/testdata/microdump.stackwalk-arm64.out \
+ 	src/processor/testdata/microdump.stackwalk-arm.out \
+diff --git a/Makefile.in b/Makefile.in
+index ab0c822d4ecaf5781499a3ae078bc1cb99bda58e..2981dafdcab2c801f175d4182727504d6aefe383 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -200,6 +200,7 @@ EXTRA_PROGRAMS = $(am__EXEEXT_1)
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_address_list_unittest \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_mips_unittest \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_mips64_unittest \
++@DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_loongarch64_unittest \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_x86_unittest \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/synth_minidump_unittest
+ 
+@@ -300,6 +301,7 @@ am__installdirs = "$(DESTDIR)$(bindir)" "$(DESTDIR)$(libexecdir)" \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_address_list_unittest$(EXEEXT) \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_mips_unittest$(EXEEXT) \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_mips64_unittest$(EXEEXT) \
++@DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_loongarch64_unittest$(EXEEXT) \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_x86_unittest$(EXEEXT) \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/synth_minidump_unittest$(EXEEXT)
+ @LINUX_HOST_TRUE@am__EXEEXT_6 = src/client/linux/linux_client_unittest$(EXEEXT) \
+@@ -493,6 +495,8 @@ am__src_libbreakpad_a_SOURCES_DIST =  \
+ 	src/processor/stackwalker_address_list.h \
+ 	src/processor/stackwalker_mips.cc \
+ 	src/processor/stackwalker_mips.h \
++	src/processor/stackwalker_loongarch64.cc \
++	src/processor/stackwalker_loongarch64.h \
+ 	src/processor/stackwalker_ppc.cc \
+ 	src/processor/stackwalker_ppc.h \
+ 	src/processor/stackwalker_ppc64.cc \
+@@ -546,6 +550,7 @@ am__src_libbreakpad_a_SOURCES_DIST =  \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm64.$(OBJEXT) \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_address_list.$(OBJEXT) \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_mips.$(OBJEXT) \
++@DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_loongarch64.$(OBJEXT) \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc.$(OBJEXT) \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc64.$(OBJEXT) \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_sparc.$(OBJEXT) \
+@@ -993,6 +998,7 @@ src_processor_exploitability_unittest_OBJECTS =  \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_mips.o \
++@DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_loongarch64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_sparc.o \
+@@ -1057,6 +1063,7 @@ src_processor_microdump_processor_unittest_OBJECTS =  \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_mips.o \
++@DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_loongarch64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_sparc.o \
+@@ -1096,6 +1103,7 @@ src_processor_microdump_stackwalk_OBJECTS =  \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_mips.o \
++@DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_loongarch64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_sparc.o \
+@@ -1149,6 +1157,7 @@ src_processor_minidump_processor_unittest_OBJECTS =  \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_mips.o \
++@DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_loongarch64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_sparc.o \
+@@ -1194,6 +1203,7 @@ src_processor_minidump_stackwalk_OBJECTS =  \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_mips.o \
++@DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_loongarch64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_sparc.o \
+@@ -1359,6 +1369,18 @@ src_processor_stackwalker_mips_unittest_OBJECTS =  \
+ @DISABLE_PROCESSOR_FALSE@	$(am__DEPENDENCIES_2) \
+ @DISABLE_PROCESSOR_FALSE@	$(am__DEPENDENCIES_1) \
+ @DISABLE_PROCESSOR_FALSE@	$(am__DEPENDENCIES_1)
++am__src_processor_stackwalker_loongarch64_unittest_SOURCES_DIST =  \
++	src/common/test_assembler.cc \
++	src/processor/stackwalker_loongarch64_unittest.cc
++@DISABLE_PROCESSOR_FALSE@am_src_processor_stackwalker_loongarch64_unittest_OBJECTS = src/common/processor_stackwalker_loongarch64_unittest-test_assembler.$(OBJEXT) \
++@DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.$(OBJEXT)
++src_processor_stackwalker_loongarch64_unittest_OBJECTS =  \
++	$(am_src_processor_stackwalker_loongarch64_unittest_OBJECTS)
++@DISABLE_PROCESSOR_FALSE@src_processor_stackwalker_loongarch64_unittest_DEPENDENCIES =  \
++@DISABLE_PROCESSOR_FALSE@	src/libbreakpad.a \
++@DISABLE_PROCESSOR_FALSE@	$(am__DEPENDENCIES_2) \
++@DISABLE_PROCESSOR_FALSE@	$(am__DEPENDENCIES_1) \
++@DISABLE_PROCESSOR_FALSE@	$(am__DEPENDENCIES_1)
+ am__src_processor_stackwalker_selftest_SOURCES_DIST =  \
+ 	src/processor/stackwalker_selftest.cc
+ @DISABLE_PROCESSOR_FALSE@am_src_processor_stackwalker_selftest_OBJECTS = src/processor/stackwalker_selftest.$(OBJEXT)
+@@ -1385,6 +1407,7 @@ src_processor_stackwalker_selftest_OBJECTS =  \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_mips.o \
++@DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_loongarch64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_sparc.o \
+@@ -1709,6 +1732,7 @@ am__depfiles_remade = src/client/$(DEPDIR)/minidump_file_writer.Po \
+ 	src/common/$(DEPDIR)/processor_stackwalker_arm_unittest-test_assembler.Po \
+ 	src/common/$(DEPDIR)/processor_stackwalker_mips64_unittest-test_assembler.Po \
+ 	src/common/$(DEPDIR)/processor_stackwalker_mips_unittest-test_assembler.Po \
++    src/common/$(DEPDIR)/processor_stackwalker_loongarch64_unittest-test_assembler.Po \
+ 	src/common/$(DEPDIR)/processor_stackwalker_x86_unittest-test_assembler.Po \
+ 	src/common/$(DEPDIR)/processor_synth_minidump_unittest-test_assembler.Po \
+ 	src/common/$(DEPDIR)/safe_math_unittest-safe_math_unittest.Po \
+@@ -1890,6 +1914,8 @@ am__depfiles_remade = src/client/$(DEPDIR)/minidump_file_writer.Po \
+ 	src/processor/$(DEPDIR)/stackwalker_mips.Po \
+ 	src/processor/$(DEPDIR)/stackwalker_mips64_unittest-stackwalker_mips64_unittest.Po \
+ 	src/processor/$(DEPDIR)/stackwalker_mips_unittest-stackwalker_mips_unittest.Po \
++	src/processor/$(DEPDIR)/stackwalker_loongarch64.Po \
++	src/processor/$(DEPDIR)/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.Po \
+ 	src/processor/$(DEPDIR)/stackwalker_ppc.Po \
+ 	src/processor/$(DEPDIR)/stackwalker_ppc64.Po \
+ 	src/processor/$(DEPDIR)/stackwalker_selftest.Po \
+@@ -2009,6 +2035,7 @@ SOURCES = $(src_client_linux_libbreakpad_client_a_SOURCES) \
+ 	$(src_processor_stackwalker_arm_unittest_SOURCES) \
+ 	$(src_processor_stackwalker_mips64_unittest_SOURCES) \
+ 	$(src_processor_stackwalker_mips_unittest_SOURCES) \
++	$(src_processor_stackwalker_loongarch64_unittest_SOURCES) \
+ 	$(src_processor_stackwalker_selftest_SOURCES) \
+ 	$(src_processor_stackwalker_x86_unittest_SOURCES) \
+ 	$(src_processor_static_address_map_unittest_SOURCES) \
+@@ -2066,6 +2093,7 @@ DIST_SOURCES =  \
+ 	$(am__src_processor_stackwalker_arm_unittest_SOURCES_DIST) \
+ 	$(am__src_processor_stackwalker_mips64_unittest_SOURCES_DIST) \
+ 	$(am__src_processor_stackwalker_mips_unittest_SOURCES_DIST) \
++	$(am__src_processor_stackwalker_loongarch64_unittest_SOURCES_DIST) \
+ 	$(am__src_processor_stackwalker_selftest_SOURCES_DIST) \
+ 	$(am__src_processor_stackwalker_x86_unittest_SOURCES_DIST) \
+ 	$(am__src_processor_static_address_map_unittest_SOURCES_DIST) \
+@@ -2649,6 +2677,8 @@ CLEANFILES = $(am__append_12)
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_address_list.h \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_mips.cc \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_mips.h \
++@DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_loongarch64.cc \
++@DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_loongarch64.h \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc.cc \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc.h \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc64.cc \
+@@ -3137,6 +3167,7 @@ TESTS = $(check_PROGRAMS) $(check_SCRIPTS)
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_mips.o \
++@DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_loongarch64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_sparc.o \
+@@ -3218,6 +3249,7 @@ TESTS = $(check_PROGRAMS) $(check_SCRIPTS)
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_mips.o \
++@DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_loongarch64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_sparc.o \
+@@ -3259,6 +3291,7 @@ TESTS = $(check_PROGRAMS) $(check_SCRIPTS)
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_mips.o \
++@DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_loongarch64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_sparc.o \
+@@ -3422,6 +3455,7 @@ TESTS = $(check_PROGRAMS) $(check_SCRIPTS)
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_mips.o \
++@DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_loongarch64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_sparc.o \
+@@ -3501,6 +3535,18 @@ TESTS = $(check_PROGRAMS) $(check_SCRIPTS)
+ @DISABLE_PROCESSOR_FALSE@src_processor_stackwalker_mips64_unittest_CPPFLAGS = \
+ @DISABLE_PROCESSOR_FALSE@	$(AM_CPPFLAGS) $(TEST_CFLAGS)
+ 
++@DISABLE_PROCESSOR_FALSE@src_processor_stackwalker_loongarch64_unittest_SOURCES = \
++@DISABLE_PROCESSOR_FALSE@	src/common/test_assembler.cc \
++@DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_loongarch64_unittest.cc
++
++@DISABLE_PROCESSOR_FALSE@src_processor_stackwalker_loongarch64_unittest_LDADD = \
++@DISABLE_PROCESSOR_FALSE@	src/libbreakpad.a \
++@DISABLE_PROCESSOR_FALSE@	$(TEST_LIBS) \
++@DISABLE_PROCESSOR_FALSE@	$(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
++
++@DISABLE_PROCESSOR_FALSE@src_processor_stackwalker_loongarch64_unittest_CPPFLAGS = \
++@DISABLE_PROCESSOR_FALSE@	$(AM_CPPFLAGS) $(TEST_CFLAGS)
++
+ @DISABLE_PROCESSOR_FALSE@src_processor_stackwalker_x86_unittest_SOURCES = \
+ @DISABLE_PROCESSOR_FALSE@	src/common/test_assembler.cc \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_x86_unittest.cc
+@@ -3611,6 +3657,7 @@ TESTS = $(check_PROGRAMS) $(check_SCRIPTS)
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_mips.o \
++@DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_loongarch64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_sparc.o \
+@@ -3651,6 +3698,7 @@ TESTS = $(check_PROGRAMS) $(check_SCRIPTS)
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_arm64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_mips.o \
++@DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_loongarch64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_ppc64.o \
+ @DISABLE_PROCESSOR_FALSE@	src/processor/stackwalker_sparc.o \
+@@ -3769,6 +3817,7 @@ EXTRA_DIST = \
+ 	src/processor/testdata/microdump-arm.dmp \
+ 	src/processor/testdata/microdump-mips32.dmp \
+ 	src/processor/testdata/microdump-mips64.dmp \
++	src/processor/testdata/microdump-loongarch64.dmp \
+ 	src/processor/testdata/microdump-multiple.dmp \
+ 	src/processor/testdata/microdump.stackwalk-arm64.out \
+ 	src/processor/testdata/microdump.stackwalk-arm.out \
+@@ -4337,6 +4386,9 @@ src/processor/stackwalker_address_list.$(OBJEXT):  \
+ src/processor/stackwalker_mips.$(OBJEXT):  \
+ 	src/processor/$(am__dirstamp) \
+ 	src/processor/$(DEPDIR)/$(am__dirstamp)
++src/processor/stackwalker_loongarch64.$(OBJEXT):  \
++	src/processor/$(am__dirstamp) \
++	src/processor/$(DEPDIR)/$(am__dirstamp)
+ src/processor/stackwalker_ppc.$(OBJEXT):  \
+ 	src/processor/$(am__dirstamp) \
+ 	src/processor/$(DEPDIR)/$(am__dirstamp)
+@@ -5049,6 +5101,18 @@ src/processor/stackwalker_mips_unittest-stackwalker_mips_unittest.$(OBJEXT):  \
+ src/processor/stackwalker_mips_unittest$(EXEEXT): $(src_processor_stackwalker_mips_unittest_OBJECTS) $(src_processor_stackwalker_mips_unittest_DEPENDENCIES) $(EXTRA_src_processor_stackwalker_mips_unittest_DEPENDENCIES) src/processor/$(am__dirstamp)
+ 	@rm -f src/processor/stackwalker_mips_unittest$(EXEEXT)
+ 	$(AM_V_CXXLD)$(CXXLINK) $(src_processor_stackwalker_mips_unittest_OBJECTS) $(src_processor_stackwalker_mips_unittest_LDADD) $(LIBS)
++
++src/common/processor_stackwalker_loongarch64_unittest-test_assembler.$(OBJEXT):  \
++	src/common/$(am__dirstamp) \
++	src/common/$(DEPDIR)/$(am__dirstamp)
++src/processor/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.$(OBJEXT):  \
++	src/processor/$(am__dirstamp) \
++	src/processor/$(DEPDIR)/$(am__dirstamp)
++
++src/processor/stackwalker_loongarch64_unittest$(EXEEXT): $(src_processor_stackwalker_loongarch64_unittest_OBJECTS) $(src_processor_stackwalker_loongarch64_unittest_DEPENDENCIES) $(EXTRA_src_processor_stackwalker_loongarch64_unittest_DEPENDENCIES) src/processor/$(am__dirstamp)
++	@rm -f src/processor/stackwalker_loongarch64_unittest$(EXEEXT)
++	$(AM_V_CXXLD)$(CXXLINK) $(src_processor_stackwalker_loongarch64_unittest_OBJECTS) $(src_processor_stackwalker_loongarch64_unittest_LDADD) $(LIBS)
++
+ src/processor/stackwalker_selftest.$(OBJEXT):  \
+ 	src/processor/$(am__dirstamp) \
+ 	src/processor/$(DEPDIR)/$(am__dirstamp)
+@@ -5452,6 +5516,7 @@ distclean-compile:
+ @AMDEP_TRUE@@am__include@ @am__quote@src/common/$(DEPDIR)/processor_stackwalker_arm_unittest-test_assembler.Po@am__quote@ # am--include-marker
+ @AMDEP_TRUE@@am__include@ @am__quote@src/common/$(DEPDIR)/processor_stackwalker_mips64_unittest-test_assembler.Po@am__quote@ # am--include-marker
+ @AMDEP_TRUE@@am__include@ @am__quote@src/common/$(DEPDIR)/processor_stackwalker_mips_unittest-test_assembler.Po@am__quote@ # am--include-marker
++@AMDEP_TRUE@@am__include@ @am__quote@src/common/$(DEPDIR)/processor_stackwalker_loongarch64_unittest-test_assembler.Po@am__quote@ # am--include-marker
+ @AMDEP_TRUE@@am__include@ @am__quote@src/common/$(DEPDIR)/processor_stackwalker_x86_unittest-test_assembler.Po@am__quote@ # am--include-marker
+ @AMDEP_TRUE@@am__include@ @am__quote@src/common/$(DEPDIR)/processor_synth_minidump_unittest-test_assembler.Po@am__quote@ # am--include-marker
+ @AMDEP_TRUE@@am__include@ @am__quote@src/common/$(DEPDIR)/safe_math_unittest-safe_math_unittest.Po@am__quote@ # am--include-marker
+@@ -5633,6 +5698,8 @@ distclean-compile:
+ @AMDEP_TRUE@@am__include@ @am__quote@src/processor/$(DEPDIR)/stackwalker_mips.Po@am__quote@ # am--include-marker
+ @AMDEP_TRUE@@am__include@ @am__quote@src/processor/$(DEPDIR)/stackwalker_mips64_unittest-stackwalker_mips64_unittest.Po@am__quote@ # am--include-marker
+ @AMDEP_TRUE@@am__include@ @am__quote@src/processor/$(DEPDIR)/stackwalker_mips_unittest-stackwalker_mips_unittest.Po@am__quote@ # am--include-marker
++@AMDEP_TRUE@@am__include@ @am__quote@src/processor/$(DEPDIR)/stackwalker_loongarch64.Po@am__quote@ # am--include-marker
++@AMDEP_TRUE@@am__include@ @am__quote@src/processor/$(DEPDIR)/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.Po@am__quote@ # am--include-marker
+ @AMDEP_TRUE@@am__include@ @am__quote@src/processor/$(DEPDIR)/stackwalker_ppc.Po@am__quote@ # am--include-marker
+ @AMDEP_TRUE@@am__include@ @am__quote@src/processor/$(DEPDIR)/stackwalker_ppc64.Po@am__quote@ # am--include-marker
+ @AMDEP_TRUE@@am__include@ @am__quote@src/processor/$(DEPDIR)/stackwalker_selftest.Po@am__quote@ # am--include-marker
+@@ -7705,6 +7772,34 @@ src/processor/stackwalker_mips_unittest-stackwalker_mips_unittest.obj: src/proce
+ @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+ @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(src_processor_stackwalker_mips_unittest_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/processor/stackwalker_mips_unittest-stackwalker_mips_unittest.obj `if test -f 'src/processor/stackwalker_mips_unittest.cc'; then $(CYGPATH_W) 'src/processor/stackwalker_mips_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/src/processor/stackwalker_mips_unittest.cc'; fi`
+ 
++src/common/processor_stackwalker_loongarch64_unittest-test_assembler.o: src/common/test_assembler.cc
++@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(src_processor_stackwalker_loongarch64_unittest_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/common/processor_stackwalker_loongarch64_unittest-test_assembler.o -MD -MP -MF src/common/$(DEPDIR)/processor_stackwalker_loongarch64_unittest-test_assembler.Tpo -c -o src/common/processor_stackwalker_loongarch64_unittest-test_assembler.o `test -f 'src/common/test_assembler.cc' || echo '$(srcdir)/'`src/common/test_assembler.cc
++@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/common/$(DEPDIR)/processor_stackwalker_loongarch64_unittest-test_assembler.Tpo src/common/$(DEPDIR)/processor_stackwalker_loongarch64_unittest-test_assembler.Po
++@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/common/test_assembler.cc' object='src/common/processor_stackwalker_loongarch64_unittest-test_assembler.o' libtool=no @AMDEPBACKSLASH@
++@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
++@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(src_processor_stackwalker_loongarch64_unittest_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/common/processor_stackwalker_loongarch64_unittest-test_assembler.o `test -f 'src/common/test_assembler.cc' || echo '$(srcdir)/'`src/common/test_assembler.cc
++
++src/common/processor_stackwalker_loongarch64_unittest-test_assembler.obj: src/common/test_assembler.cc
++@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(src_processor_stackwalker_loongarch64_unittest_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/common/processor_stackwalker_loongarch64_unittest-test_assembler.obj -MD -MP -MF src/common/$(DEPDIR)/processor_stackwalker_loongarch64_unittest-test_assembler.Tpo -c -o src/common/processor_stackwalker_loongarch64_unittest-test_assembler.obj `if test -f 'src/common/test_assembler.cc'; then $(CYGPATH_W) 'src/common/test_assembler.cc'; else $(CYGPATH_W) '$(srcdir)/src/common/test_assembler.cc'; fi`
++@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/common/$(DEPDIR)/processor_stackwalker_loongarch64_unittest-test_assembler.Tpo src/common/$(DEPDIR)/processor_stackwalker_loongarch64_unittest-test_assembler.Po
++@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/common/test_assembler.cc' object='src/common/processor_stackwalker_loongarch64_unittest-test_assembler.obj' libtool=no @AMDEPBACKSLASH@
++@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
++@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(src_processor_stackwalker_loongarch64_unittest_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/common/processor_stackwalker_loongarch64_unittest-test_assembler.obj `if test -f 'src/common/test_assembler.cc'; then $(CYGPATH_W) 'src/common/test_assembler.cc'; else $(CYGPATH_W) '$(srcdir)/src/common/test_assembler.cc'; fi`
++
++src/processor/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.o: src/processor/stackwalker_loongarch64_unittest.cc
++@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(src_processor_stackwalker_loongarch64_unittest_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/processor/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.o -MD -MP -MF src/processor/$(DEPDIR)/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.Tpo -c -o src/processor/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.o `test -f 'src/processor/stackwalker_loongarch64_unittest.cc' || echo '$(srcdir)/'`src/processor/stackwalker_loongarch64_unittest.cc
++@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/processor/$(DEPDIR)/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.Tpo src/processor/$(DEPDIR)/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.Po
++@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/processor/stackwalker_loongarch64_unittest.cc' object='src/processor/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.o' libtool=no @AMDEPBACKSLASH@
++@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
++@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(src_processor_stackwalker_loongarch64_unittest_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/processor/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.o `test -f 'src/processor/stackwalker_loongarch64_unittest.cc' || echo '$(srcdir)/'`src/processor/stackwalker_loongarch64_unittest.cc
++
++src/processor/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.obj: src/processor/stackwalker_loongarch64_unittest.cc
++@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(src_processor_stackwalker_loongarch64_unittest_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/processor/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.obj -MD -MP -MF src/processor/$(DEPDIR)/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.Tpo -c -o src/processor/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.obj `if test -f 'src/processor/stackwalker_loongarch64_unittest.cc'; then $(CYGPATH_W) 'src/processor/stackwalker_loongarch64_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/src/processor/stackwalker_loongarch64_unittest.cc'; fi`
++@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/processor/$(DEPDIR)/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.Tpo src/processor/$(DEPDIR)/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.Po
++@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/processor/stackwalker_loongarch64_unittest.cc' object='src/processor/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.obj' libtool=no @AMDEPBACKSLASH@
++@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
++@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(src_processor_stackwalker_loongarch64_unittest_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/processor/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.obj `if test -f 'src/processor/stackwalker_loongarch64_unittest.cc'; then $(CYGPATH_W) 'src/processor/stackwalker_loongarch64_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/src/processor/stackwalker_loongarch64_unittest.cc'; fi`
++
+ src/common/processor_stackwalker_x86_unittest-test_assembler.o: src/common/test_assembler.cc
+ @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(src_processor_stackwalker_x86_unittest_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/common/processor_stackwalker_x86_unittest-test_assembler.o -MD -MP -MF src/common/$(DEPDIR)/processor_stackwalker_x86_unittest-test_assembler.Tpo -c -o src/common/processor_stackwalker_x86_unittest-test_assembler.o `test -f 'src/common/test_assembler.cc' || echo '$(srcdir)/'`src/common/test_assembler.cc
+ @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/common/$(DEPDIR)/processor_stackwalker_x86_unittest-test_assembler.Tpo src/common/$(DEPDIR)/processor_stackwalker_x86_unittest-test_assembler.Po
+@@ -9109,6 +9204,13 @@ src/processor/stackwalker_mips64_unittest.log: src/processor/stackwalker_mips64_
+ 	--log-file $$b.log --trs-file $$b.trs \
+ 	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
+ 	"$$tst" $(AM_TESTS_FD_REDIRECT)
++src/processor/stackwalker_loongarch64_unittest.log: src/processor/stackwalker_loongarch64_unittest$(EXEEXT)
++	@p='src/processor/stackwalker_loongarch64_unittest$(EXEEXT)'; \
++	b='src/processor/stackwalker_loongarch64_unittest'; \
++	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
++	--log-file $$b.log --trs-file $$b.trs \
++	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
++	"$$tst" $(AM_TESTS_FD_REDIRECT)
+ src/processor/stackwalker_x86_unittest.log: src/processor/stackwalker_x86_unittest$(EXEEXT)
+ 	@p='src/processor/stackwalker_x86_unittest$(EXEEXT)'; \
+ 	b='src/processor/stackwalker_x86_unittest'; \
+@@ -9559,6 +9661,7 @@ distclean: distclean-am
+ 	-rm -f src/common/$(DEPDIR)/processor_stackwalker_arm_unittest-test_assembler.Po
+ 	-rm -f src/common/$(DEPDIR)/processor_stackwalker_mips64_unittest-test_assembler.Po
+ 	-rm -f src/common/$(DEPDIR)/processor_stackwalker_mips_unittest-test_assembler.Po
++	-rm -f src/common/$(DEPDIR)/processor_stackwalker_loongarch64_unittest-test_assembler.Po
+ 	-rm -f src/common/$(DEPDIR)/processor_stackwalker_x86_unittest-test_assembler.Po
+ 	-rm -f src/common/$(DEPDIR)/processor_synth_minidump_unittest-test_assembler.Po
+ 	-rm -f src/common/$(DEPDIR)/safe_math_unittest-safe_math_unittest.Po
+@@ -9740,6 +9843,8 @@ distclean: distclean-am
+ 	-rm -f src/processor/$(DEPDIR)/stackwalker_mips.Po
+ 	-rm -f src/processor/$(DEPDIR)/stackwalker_mips64_unittest-stackwalker_mips64_unittest.Po
+ 	-rm -f src/processor/$(DEPDIR)/stackwalker_mips_unittest-stackwalker_mips_unittest.Po
++	-rm -f src/processor/$(DEPDIR)/stackwalker_loongarch64.Po
++	-rm -f src/processor/$(DEPDIR)/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.Po
+ 	-rm -f src/processor/$(DEPDIR)/stackwalker_ppc.Po
+ 	-rm -f src/processor/$(DEPDIR)/stackwalker_ppc64.Po
+ 	-rm -f src/processor/$(DEPDIR)/stackwalker_selftest.Po
+@@ -9905,6 +10010,7 @@ maintainer-clean: maintainer-clean-am
+ 	-rm -f src/common/$(DEPDIR)/processor_stackwalker_arm_unittest-test_assembler.Po
+ 	-rm -f src/common/$(DEPDIR)/processor_stackwalker_mips64_unittest-test_assembler.Po
+ 	-rm -f src/common/$(DEPDIR)/processor_stackwalker_mips_unittest-test_assembler.Po
++	-rm -f src/common/$(DEPDIR)/processor_stackwalker_loongarch64_unittest-test_assembler.Po
+ 	-rm -f src/common/$(DEPDIR)/processor_stackwalker_x86_unittest-test_assembler.Po
+ 	-rm -f src/common/$(DEPDIR)/processor_synth_minidump_unittest-test_assembler.Po
+ 	-rm -f src/common/$(DEPDIR)/safe_math_unittest-safe_math_unittest.Po
+@@ -10086,6 +10192,8 @@ maintainer-clean: maintainer-clean-am
+ 	-rm -f src/processor/$(DEPDIR)/stackwalker_mips.Po
+ 	-rm -f src/processor/$(DEPDIR)/stackwalker_mips64_unittest-stackwalker_mips64_unittest.Po
+ 	-rm -f src/processor/$(DEPDIR)/stackwalker_mips_unittest-stackwalker_mips_unittest.Po
++	-rm -f src/processor/$(DEPDIR)/stackwalker_loongarch64.Po
++	-rm -f src/processor/$(DEPDIR)/stackwalker_loongarch64_unittest-stackwalker_loongarch64_unittest.Po
+ 	-rm -f src/processor/$(DEPDIR)/stackwalker_ppc.Po
+ 	-rm -f src/processor/$(DEPDIR)/stackwalker_ppc64.Po
+ 	-rm -f src/processor/$(DEPDIR)/stackwalker_selftest.Po
+diff --git a/src/client/linux/dump_writer_common/raw_context_cpu.h b/src/client/linux/dump_writer_common/raw_context_cpu.h
+index 07d9171a0a6e747f6650c67c5f50d907d176757e..0bc41659f34fa10502adce29bc079687f2362bf0 100644
+--- a/src/client/linux/dump_writer_common/raw_context_cpu.h
++++ b/src/client/linux/dump_writer_common/raw_context_cpu.h
+@@ -44,6 +44,8 @@ typedef MDRawContextARM RawContextCPU;
+ typedef MDRawContextARM64_Old RawContextCPU;
+ #elif defined(__mips__)
+ typedef MDRawContextMIPS RawContextCPU;
++#elif defined(__loongarch_lp64)
++typedef MDRawContextLOONGARCH64 RawContextCPU;
+ #else
+ #error "This code has not been ported to your platform yet."
+ #endif
+diff --git a/src/client/linux/dump_writer_common/thread_info.cc b/src/client/linux/dump_writer_common/thread_info.cc
+index aae1dc13b2538784d053b4ec3c4393da3baa8ea6..1759ff46aa54350a02cd76d753a643ac505b8bb7 100644
+--- a/src/client/linux/dump_writer_common/thread_info.cc
++++ b/src/client/linux/dump_writer_common/thread_info.cc
+@@ -270,7 +270,28 @@ void ThreadInfo::FillCPUContext(RawContextCPU* out) const {
+   out->float_save.fir = mcontext.fpc_eir;
+ #endif
+ }
+-#endif  // __mips__
++
++#elif defined(__loongarch_lp64)
++
++uintptr_t ThreadInfo::GetInstructionPointer() const {
++  return regs.csr_era;
++}
++
++void ThreadInfo::FillCPUContext(RawContextCPU* out) const {
++  out->context_flags = MD_CONTEXT_LOONGARCH64_FULL;
++
++  for (int i = 0; i < MD_CONTEXT_LOONGARCH64_GPR_COUNT; ++i)
++    out->iregs[i] = regs.regs[i];
++
++  for (int i = 0; i < MD_FLOATINGSAVEAREA_LOONGARCH64_FPR_COUNT; ++i)
++    out->float_save.regs[i] = fpregs.fpr[i];
++  out->float_save.fcc = fpregs.fcc;
++  out->float_save.fcsr = fpregs.fcsr;
++
++  out->csr_era = regs.csr_era;
++}
++
++#endif  // __loongarch_lp64
+ 
+ void ThreadInfo::GetGeneralPurposeRegisters(void** gp_regs, size_t* size) {
+   assert(gp_regs || size);
+diff --git a/src/client/linux/dump_writer_common/thread_info.h b/src/client/linux/dump_writer_common/thread_info.h
+index fb216fa6d71542b63d9108ed9ae3660a465a5a52..11533e45dee840412791b2d2bb3047cd64fc3f6c 100644
+--- a/src/client/linux/dump_writer_common/thread_info.h
++++ b/src/client/linux/dump_writer_common/thread_info.h
+@@ -71,6 +71,10 @@ struct ThreadInfo {
+ #elif defined(__mips__)
+   // Use the structure defined in <sys/ucontext.h>.
+   mcontext_t mcontext;
++#elif defined(__loongarch_lp64)
++  // Use the structures defined in <sys/user.h>
++  struct user_regs_struct regs;
++  struct user_fp_struct fpregs;
+ #endif
+ 
+   // Returns the instruction pointer (platform-dependent impl.).
+diff --git a/src/client/linux/dump_writer_common/ucontext_reader.cc b/src/client/linux/dump_writer_common/ucontext_reader.cc
+index 6eec1be24657fb615eaef90675b344496017e061..6471cb4be8ef10d00412dfeda95ee01936833db7 100644
+--- a/src/client/linux/dump_writer_common/ucontext_reader.cc
++++ b/src/client/linux/dump_writer_common/ucontext_reader.cc
+@@ -254,6 +254,31 @@ void UContextReader::FillCPUContext(RawContextCPU* out, const ucontext_t* uc) {
+   out->float_save.fir = uc->uc_mcontext.fpc_eir;  // Unused.
+ #endif
+ }
++
++#elif defined(__loongarch_lp64)
++
++uintptr_t UContextReader::GetStackPointer(const ucontext_t* uc) {
++  return uc->uc_mcontext.__gregs[MD_CONTEXT_LOONGARCH64_REG_SP];
++}
++
++uintptr_t UContextReader::GetInstructionPointer(const ucontext_t* uc) {
++  return uc->uc_mcontext.__pc;
++}
++
++void UContextReader::FillCPUContext(RawContextCPU* out, const ucontext_t* uc,
++                                    const fpstate_t* fpregs) {
++  out->context_flags = MD_CONTEXT_LOONGARCH64_FULL;
++
++  for (int i = 0; i < MD_CONTEXT_LOONGARCH64_GPR_COUNT; ++i)
++    out->iregs[i] = uc->uc_mcontext.__gregs[i];
++
++  for (int i = 0; i < MD_FLOATINGSAVEAREA_LOONGARCH64_FPR_COUNT; ++i)
++    out->float_save.regs[i] = fpregs->regs[i];
++  out->float_save.fcc = fpregs->fcc;
++  out->float_save.fcsr = fpregs->fcsr;
++
++  out->csr_era = uc->uc_mcontext.__pc;
++}
+ #endif
+ 
+ }  // namespace google_breakpad
+diff --git a/src/client/linux/dump_writer_common/ucontext_reader.h b/src/client/linux/dump_writer_common/ucontext_reader.h
+index 7d41008815fae16bf85c4c25bf8c7a1a2d7d2591..5f1e0b26166af529cc6fe4fa4d628872cf9ffa4e 100644
+--- a/src/client/linux/dump_writer_common/ucontext_reader.h
++++ b/src/client/linux/dump_writer_common/ucontext_reader.h
+@@ -55,6 +55,9 @@ struct UContextReader {
+ #elif defined(__aarch64__)
+   static void FillCPUContext(RawContextCPU* out, const ucontext_t* uc,
+                              const struct fpsimd_context* fpregs);
++#elif defined(__loongarch_lp64)
++  static void FillCPUContext(RawContextCPU* out, const ucontext_t* uc,
++                             const fpstate_t* fpregs);
+ #else
+   static void FillCPUContext(RawContextCPU* out, const ucontext_t* uc);
+ #endif
+diff --git a/src/client/linux/handler/exception_handler.cc b/src/client/linux/handler/exception_handler.cc
+index 499be0a986c1ca1d2e67510890dc8257c9aa3c0a..8089ea29addc612bab7b4f0de316d5eadd20a472 100644
+--- a/src/client/linux/handler/exception_handler.cc
++++ b/src/client/linux/handler/exception_handler.cc
+@@ -138,7 +138,7 @@ void InstallAlternateStackLocked() {
+   // SIGSTKSZ may be too small to prevent the signal handlers from overrunning
+   // the alternative stack. Ensure that the size of the alternative stack is
+   // large enough.
+-  const unsigned kSigStackSize = std::max<unsigned>(16384, SIGSTKSZ);
++  const unsigned kSigStackSize = std::max<unsigned>((long)16384, (long)SIGSTKSZ);
+ 
+   // Only set an alternative stack if there isn't already one, or if the current
+   // one is too small.
+@@ -461,6 +461,16 @@ bool ExceptionHandler::HandleSignal(int /*sig*/, siginfo_t* info, void* uc) {
+     memcpy(&g_crash_context_.float_state, fp_ptr,
+            sizeof(g_crash_context_.float_state));
+   }
++#elif defined(__loongarch_lp64)
++  ucontext_t* uc_ptr = (ucontext_t*)uc;
++  struct sctx_info* ctx_info_ptr =
++      (struct sctx_info*)&uc_ptr->uc_mcontext.__extcontext;
++  if (ctx_info_ptr->magic == FPU_CTX_MAGIC) {
++    struct fpu_context* fpu_ptr = (struct fpu_context*)(&uc_ptr->uc_mcontext.__extcontext +
++                                   sizeof(struct sctx_info));
++    memcpy(&g_crash_context_.float_state, fpu_ptr,
++           sizeof(g_crash_context_.float_state));
++  }
+ #elif !defined(__ARM_EABI__) && !defined(__mips__)
+   // FP state is not part of user ABI on ARM Linux.
+   // In case of MIPS Linux FP state is already part of ucontext_t
+@@ -701,7 +711,7 @@ bool ExceptionHandler::WriteMinidump() {
+   }
+ #endif
+ 
+-#if !defined(__ARM_EABI__) && !defined(__aarch64__) && !defined(__mips__)
++#if !defined(__ARM_EABI__) && !defined(__aarch64__) && !defined(__mips__) && !defined(__loongarch_lp64)
+   // FPU state is not part of ARM EABI ucontext_t.
+   memcpy(&context.float_state, context.context.uc_mcontext.fpregs,
+          sizeof(context.float_state));
+@@ -726,6 +736,9 @@ bool ExceptionHandler::WriteMinidump() {
+ #elif defined(__mips__)
+   context.siginfo.si_addr =
+       reinterpret_cast<void*>(context.context.uc_mcontext.pc);
++#elif defined(__loongarch_lp64)
++  context.siginfo.si_addr =
++      reinterpret_cast<void*>(context.context.uc_mcontext.__pc);
+ #else
+ #error "This code has not been ported to your platform yet."
+ #endif
+diff --git a/src/client/linux/microdump_writer/microdump_writer.cc b/src/client/linux/microdump_writer/microdump_writer.cc
+index 22edb1b8dd020a5018cfd618f5955063887a124f..c9d5882c81d583ab7110ac9bf94383c50cb6db10 100644
+--- a/src/client/linux/microdump_writer/microdump_writer.cc
++++ b/src/client/linux/microdump_writer/microdump_writer.cc
+@@ -337,6 +337,8 @@ class MicrodumpWriter {
+ # else
+ #  error "This mips ABI is currently not supported (n32)"
+ #endif
++#elif defined(__loongarch_lp64)
++    const char kArch[] = "loongarch64";
+ #else
+ #error "This code has not been ported to your platform yet"
+ #endif
+diff --git a/src/client/linux/microdump_writer/microdump_writer_unittest.cc b/src/client/linux/microdump_writer/microdump_writer_unittest.cc
+index 6339ac0cd83209c34ca45b78b3e03ba848ac875a..df52415f62211df571d3f422488b1551835f1c5c 100644
+--- a/src/client/linux/microdump_writer/microdump_writer_unittest.cc
++++ b/src/client/linux/microdump_writer/microdump_writer_unittest.cc
+@@ -280,9 +280,15 @@ TEST(MicrodumpWriterTest, BasicWithMappings) {
+   ASSERT_TRUE(ContainsMicrodump(buf));
+ 
+ #ifdef __LP64__
++#if defined(__loongarch_lp64)
++  ASSERT_NE(std::string::npos,
++            buf.find("M 0000000000004000 000000000000002A 0000000000004000 "
++                     "33221100554477668899AABBCCDDEEFF0 libfoo.so"));
++#else
+   ASSERT_NE(std::string::npos,
+             buf.find("M 0000000000001000 000000000000002A 0000000000001000 "
+                      "33221100554477668899AABBCCDDEEFF0 libfoo.so"));
++#endif
+ #else
+   ASSERT_NE(std::string::npos,
+             buf.find("M 00001000 0000002A 00001000 "
+diff --git a/src/client/linux/minidump_writer/linux_core_dumper.cc b/src/client/linux/minidump_writer/linux_core_dumper.cc
+index 92e3a8444e650917cf2fce33ac5708949d65fa56..b0978bd12b756a55087a879e64feaad5f8405bb1 100644
+--- a/src/client/linux/minidump_writer/linux_core_dumper.cc
++++ b/src/client/linux/minidump_writer/linux_core_dumper.cc
+@@ -42,6 +42,18 @@
+ // To get register definitions.
+ #include <asm/reg.h>
+ #endif
++#if defined(__loongarch_lp64)
++#include <asm/reg.h>
++#define LOONGARCH64_EF_CSR_EPC      32
++#define LOONGARCH64_EF_CSR_BADVADDR 33
++#define LOONGARCH64_EF_CSR_CRMD     34
++#define LOONGARCH64_EF_CSR_PRMD     35
++#define LOONGARCH64_EF_CSR_EUEN     36
++#define LOONGARCH64_EF_CSR_ECFG     37
++#define LOONGARCH64_EF_CSR_ESTAT    38
++
++#define LOONGARCH64_EF_SIZE     312 /* size in bytes */
++#endif
+ 
+ #include "common/linux/elf_gnu_compat.h"
+ #include "common/linux/linux_libc_support.h"
+@@ -112,6 +124,10 @@ bool LinuxCoreDumper::GetThreadInfoByIndex(size_t index, ThreadInfo* info) {
+ #elif defined(__mips__)
+   stack_pointer =
+       reinterpret_cast<uint8_t*>(info->mcontext.gregs[MD_CONTEXT_MIPS_REG_SP]);
++#elif defined(__loongarch_lp64)
++  memcpy(&stack_pointer,
++    &info->regs.regs[MD_CONTEXT_LOONGARCH64_REG_SP],
++    sizeof(info->regs.regs[MD_CONTEXT_LOONGARCH64_REG_SP]));
+ #else
+ #error "This code hasn't been ported to your platform yet."
+ #endif
+@@ -218,9 +234,16 @@ bool LinuxCoreDumper::EnumerateThreads() {
+         info.mcontext.mdlo = status->pr_reg[EF_LO];
+         info.mcontext.mdhi = status->pr_reg[EF_HI];
+         info.mcontext.pc = status->pr_reg[EF_CP0_EPC];
+-#else  // __mips__
++#elif defined(__loongarch_lp64)
++        memcpy(info.regs.regs,
++               &status->pr_reg[LOONGARCH_EF_R0],
++               sizeof(info.regs.regs));
++        memcpy(&info.regs.csr_era,
++               &status->pr_reg[LOONGARCH_EF_CSR_ERA],
++               sizeof(info.regs.csr_era));
++#else
+         memcpy(&info.regs, status->pr_reg, sizeof(info.regs));
+-#endif  // __mips__
++#endif  // __loongarch_lp64
+         if (first_thread) {
+           crash_thread_ = pid;
+           crash_signal_ = status->pr_info.si_signo;
+diff --git a/src/client/linux/minidump_writer/linux_dumper.h b/src/client/linux/minidump_writer/linux_dumper.h
+index 7bee160f1aba9d34adf3c328fa92497505ff7421..cb6f5dcf6aa106d8cc6cab25aade396515478138 100644
+--- a/src/client/linux/minidump_writer/linux_dumper.h
++++ b/src/client/linux/minidump_writer/linux_dumper.h
+@@ -63,7 +63,8 @@ namespace google_breakpad {
+  (defined(__mips__) && _MIPS_SIM == _ABIO32)
+ typedef Elf32_auxv_t elf_aux_entry;
+ #elif defined(__x86_64) || defined(__aarch64__) || \
+-     (defined(__mips__) && _MIPS_SIM != _ABIO32)
++     (defined(__mips__) && _MIPS_SIM != _ABIO32) || \
++      defined(__loongarch_lp64)
+ typedef Elf64_auxv_t elf_aux_entry;
+ #endif
+ 
+diff --git a/src/client/linux/minidump_writer/linux_dumper_unittest_helper.cc b/src/client/linux/minidump_writer/linux_dumper_unittest_helper.cc
+index 331f4bb346c3f3eb97558bda5bf99edc507d5e49..3e66db8f08ab16bbf61ad92fe733e6249a41436a 100644
+--- a/src/client/linux/minidump_writer/linux_dumper_unittest_helper.cc
++++ b/src/client/linux/minidump_writer/linux_dumper_unittest_helper.cc
+@@ -51,6 +51,8 @@
+ #define TID_PTR_REGISTER "rcx"
+ #elif defined(__mips__)
+ #define TID_PTR_REGISTER "$1"
++#elif defined(__loongarch_lp64)
++#define TID_PTR_REGISTER "$r1"
+ #else
+ #error This test has not been ported to this platform.
+ #endif
+diff --git a/src/client/linux/minidump_writer/linux_ptrace_dumper.cc b/src/client/linux/minidump_writer/linux_ptrace_dumper.cc
+index e3ddb81a65902e2f72d32f004b40938407f3c38d..63747d973a70032f758644361e443db3db80565b 100644
+--- a/src/client/linux/minidump_writer/linux_ptrace_dumper.cc
++++ b/src/client/linux/minidump_writer/linux_ptrace_dumper.cc
+@@ -53,6 +53,18 @@
+ #if defined(__i386)
+ #include <cpuid.h>
+ #endif
++#if defined(__loongarch_lp64)
++#include <asm/reg.h>
++#define LOONGARCH64_EF_CSR_EPC      32
++#define LOONGARCH64_EF_CSR_BADVADDR 33
++#define LOONGARCH64_EF_CSR_CRMD     34
++#define LOONGARCH64_EF_CSR_PRMD     35
++#define LOONGARCH64_EF_CSR_EUEN     36
++#define LOONGARCH64_EF_CSR_ECFG     37
++#define LOONGARCH64_EF_CSR_ESTAT    38
++
++#define LOONGARCH64_EF_SIZE     312 /* size in bytes */
++#endif
+ 
+ #include "client/linux/minidump_writer/directory_reader.h"
+ #include "client/linux/minidump_writer/line_reader.h"
+@@ -286,6 +298,12 @@ bool LinuxPtraceDumper::GetThreadInfoByIndex(size_t index, ThreadInfo* info) {
+              reinterpret_cast<void*>(DSP_CONTROL), &info->mcontext.dsp);
+ #endif
+ 
++/* FIXME does it needed */
++#if defined(__loongarch_lp64)
++  sys_ptrace(PTRACE_PEEKUSER, tid,
++             reinterpret_cast<void*>(LOONGARCH_EF_CSR_ERA), &info->regs.csr_era);
++#endif
++
+   const uint8_t* stack_pointer;
+ #if defined(__i386)
+   my_memcpy(&stack_pointer, &info->regs.esp, sizeof(info->regs.esp));
+@@ -298,6 +316,10 @@ bool LinuxPtraceDumper::GetThreadInfoByIndex(size_t index, ThreadInfo* info) {
+ #elif defined(__mips__)
+   stack_pointer =
+       reinterpret_cast<uint8_t*>(info->mcontext.gregs[MD_CONTEXT_MIPS_REG_SP]);
++#elif defined(__loongarch_lp64)
++  my_memcpy(&stack_pointer,
++    &info->regs.regs[MD_CONTEXT_LOONGARCH64_REG_SP],
++    sizeof(info->regs.regs[MD_CONTEXT_LOONGARCH64_REG_SP]));
+ #else
+ #error "This code hasn't been ported to your platform yet."
+ #endif
+diff --git a/src/client/linux/minidump_writer/linux_ptrace_dumper_unittest.cc b/src/client/linux/minidump_writer/linux_ptrace_dumper_unittest.cc
+index 11c392d83d7bef59693d62af71be7bf0801c6e62..6e90ec2f0f3860b5b64720ae1cf2e434b8944b14 100644
+--- a/src/client/linux/minidump_writer/linux_ptrace_dumper_unittest.cc
++++ b/src/client/linux/minidump_writer/linux_ptrace_dumper_unittest.cc
+@@ -464,6 +464,9 @@ TEST(LinuxPtraceDumperTest, VerifyStackReadWithMultipleThreads) {
+ #elif defined(__mips__)
+     pid_t* process_tid_location =
+         reinterpret_cast<pid_t*>(one_thread.mcontext.gregs[1]);
++#elif defined(__loongarch_lp64)
++    pid_t* process_tid_location =
++        reinterpret_cast<pid_t*>(one_thread.regs.regs[1]);
+ #else
+ #error This test has not been ported to this platform.
+ #endif
+@@ -561,6 +564,8 @@ TEST_F(LinuxPtraceDumperTest, SanitizeStackCopy) {
+   uintptr_t heap_addr = thread_info.regs.rcx;
+ #elif defined(__mips__)
+   uintptr_t heap_addr = thread_info.mcontext.gregs[1];
++#elif defined(__loongarch_lp64)
++  uintptr_t heap_addr = thread_info.regs.regs[1];
+ #else
+ #error This test has not been ported to this platform.
+ #endif
+diff --git a/src/client/linux/minidump_writer/minidump_writer.cc b/src/client/linux/minidump_writer/minidump_writer.cc
+index 7ce9ac57023f91755de33710e70fc17e16d56738..b385856d11f570f3bcb9bb15f5177359aac892ec 100644
+--- a/src/client/linux/minidump_writer/minidump_writer.cc
++++ b/src/client/linux/minidump_writer/minidump_writer.cc
+@@ -950,7 +950,7 @@ class MinidumpWriter {
+     dirent->location.rva = 0;
+   }
+ 
+-#if defined(__i386__) || defined(__x86_64__) || defined(__mips__)
++#if defined(__i386__) || defined(__x86_64__) || defined(__mips__) || defined(__loongarch_lp64)
+   bool WriteCPUInformation(MDRawSystemInfo* sys_info) {
+     char vendor_id[sizeof(sys_info->cpu.x86_cpu_info.vendor_id) + 1] = {0};
+     static const char vendor_id_name[] = "vendor_id";
+@@ -978,6 +978,8 @@ class MinidumpWriter {
+ # else
+ #  error "This mips ABI is currently not supported (n32)"
+ #endif
++#elif defined(__loongarch_lp64)
++        MD_CPU_ARCHITECTURE_LOONGARCH64;
+ #elif defined(__i386__)
+         MD_CPU_ARCHITECTURE_X86;
+ #else
+diff --git a/src/client/linux/minidump_writer/minidump_writer.h b/src/client/linux/minidump_writer/minidump_writer.h
+index e3b0b16daeaf94f1ff5fb013f1d84b20440bfbad..e9cf9df9d0149b92f20dd3f1d96a2005ade3a47f 100644
+--- a/src/client/linux/minidump_writer/minidump_writer.h
++++ b/src/client/linux/minidump_writer/minidump_writer.h
+@@ -48,6 +48,8 @@ class ExceptionHandler;
+ 
+ #if defined(__aarch64__)
+ typedef struct fpsimd_context fpstate_t;
++#elif defined(__loongarch_lp64)
++typedef struct fpu_context fpstate_t;
+ #elif !defined(__ARM_EABI__) && !defined(__mips__)
+ typedef std::remove_pointer<fpregset_t>::type fpstate_t;
+ #endif
+diff --git a/src/client/linux/minidump_writer/minidump_writer_unittest.cc b/src/client/linux/minidump_writer/minidump_writer_unittest.cc
+index b7a2c61e130cc85760a75e44ac2f460d9a701e6a..1c37f01889ff1c41411d77473a82ff58d594d65c 100644
+--- a/src/client/linux/minidump_writer/minidump_writer_unittest.cc
++++ b/src/client/linux/minidump_writer/minidump_writer_unittest.cc
+@@ -717,6 +717,9 @@ TEST(MinidumpWriterTest, InvalidStackPointer) {
+ #elif defined(__mips__)
+   context.context.uc_mcontext.gregs[MD_CONTEXT_MIPS_REG_SP] =
+       invalid_stack_pointer;
++#elif defined(__loongarch_lp64)
++  context.context.uc_mcontext.__gregs[MD_CONTEXT_LOONGARCH64_REG_SP] =
++      invalid_stack_pointer;
+ #else
+ # error "This code has not been ported to your platform yet."
+ #endif
+diff --git a/src/common/dwarf_cfi_to_module.cc b/src/common/dwarf_cfi_to_module.cc
+index 794bab530922f5a58dc2bc03996e25560ba176a7..27937d303f15a08a2d3691d044481fcc155dab80 100644
+--- a/src/common/dwarf_cfi_to_module.cc
++++ b/src/common/dwarf_cfi_to_module.cc
+@@ -142,6 +142,22 @@ vector<string> DwarfCFIToModule::RegisterNames::MIPS() {
+                     sizeof(kRegisterNames) / sizeof(kRegisterNames[0]));
+ }
+ 
++vector<string> DwarfCFIToModule::RegisterNames::LOONGARCH64() {
++  static const char* const kRegisterNames[] = {
++    "$zero", "$ra",  "$tp",  "$sp",  "$a0",   "$a1",  "$a2",  "$a3",
++    "$a4",   "$a5",  "$a6",  "$a7",  "$t0",   "$t1",  "$t2",  "$t3",
++    "$t4",  "$t5",   "$t6",  "$t7",  "$t8",   "$x",   "$fp",  "$s0",
++    "$s1",  "$s2",   "$s3",  "$s4",  "$s5",   "$s6",  "$s7",  "$s8",
++    "$fa0", "$fa1",  "$fa2", "$fa3", "$fa4",  "$fa5", "$fa6", "$fa7",
++    "$ft0", "$ft1",  "$ft2", "$ft3", "$ft4",  "$ft5", "$ft6", "$ft7",
++    "$ft8", "$ft9",  "$ft10","$ft11","$ft12", "$ft13","$ft14","$ft15",
++    "$fs0", "$fs1", "$fs2",  "$fs3", "$fs4",  "$fs5", "$fs6", "$fs7"
++  };
++
++  return MakeVector(kRegisterNames,
++                    sizeof(kRegisterNames) / sizeof(kRegisterNames[0]));
++}
++
+ bool DwarfCFIToModule::Entry(size_t offset, uint64_t address, uint64_t length,
+                              uint8_t version, const string& augmentation,
+                              unsigned return_address) {
+diff --git a/src/common/dwarf_cfi_to_module.h b/src/common/dwarf_cfi_to_module.h
+index b6d5fceba6c544edb6545a0e64b8714833feed15..44001fac8379114ca23523f8d191bb10bae9b451 100644
+--- a/src/common/dwarf_cfi_to_module.h
++++ b/src/common/dwarf_cfi_to_module.h
+@@ -114,6 +114,9 @@ class DwarfCFIToModule: public CallFrameInfo::Handler {
+     // MIPS.
+     static vector<string> MIPS();
+ 
++    //LOONGARCH64
++    static vector<string> LOONGARCH64();
++
+    private:
+     // Given STRINGS, an array of C strings with SIZE elements, return an
+     // equivalent vector<string>.
+diff --git a/src/common/linux/breakpad_getcontext.S b/src/common/linux/breakpad_getcontext.S
+index 2ebcf3191000e26f772a6575741cf1524dec0383..bd65563afa2c4d74383e2f26c07675f167d5bb46 100644
+--- a/src/common/linux/breakpad_getcontext.S
++++ b/src/common/linux/breakpad_getcontext.S
+@@ -276,10 +276,10 @@ breakpad_getcontext:
+ #elif defined(__mips__)
+ 
+ // This implementation is inspired by implementation of getcontext in glibc.
+-#include <asm-mips/asm.h>
+-#include <asm-mips/regdef.h>
++#include <sys/asm.h>
++#include <sys/regdef.h>
+ #if _MIPS_SIM == _ABIO32
+-#include <asm-mips/fpregdef.h>
++#include <sys/fpregdef.h>
+ #endif
+ 
+ // from asm-mips/asm.h
+@@ -445,6 +445,98 @@ NESTED (breakpad_getcontext, FRAME_SIZE, ra)
+ END (breakpad_getcontext)
+ #endif // _MIPS_SIM == _ABIO32
+ 
++#elif defined(__loongarch_lp64)
++
++#define  _NSIG                       64
++#define  __NR_rt_sigprocmask         135
++
++  .text
++  .global breakpad_getcontext
++  .hidden breakpad_getcontext
++  .type breakpad_getcontext, @function
++  .align 4
++breakpad_getcontext:
++  STORE_PC
++  STORE_GPR(0)
++  STORE_GPR(1)
++  STORE_GPR(2)
++  STORE_GPR(3)
++  STORE_GPR(4)
++  STORE_GPR(5)
++  STORE_GPR(6)
++  STORE_GPR(7)
++  STORE_GPR(8)
++  STORE_GPR(9)
++  STORE_GPR(10)
++  STORE_GPR(11)
++  STORE_GPR(12)
++  STORE_GPR(13)
++  STORE_GPR(14)
++  STORE_GPR(15)
++  STORE_GPR(16)
++  STORE_GPR(17)
++  STORE_GPR(18)
++  STORE_GPR(19)
++  STORE_GPR(20)
++  STORE_GPR(21)
++  STORE_GPR(22)
++  STORE_GPR(23)
++  STORE_GPR(24)
++  STORE_GPR(25)
++  STORE_GPR(26)
++  STORE_GPR(27)
++  STORE_GPR(28)
++  STORE_GPR(29)
++  STORE_GPR(30)
++  STORE_GPR(31)
++  STORE_FPR(0)
++  STORE_FPR(1)
++  STORE_FPR(2)
++  STORE_FPR(3)
++  STORE_FPR(4)
++  STORE_FPR(5)
++  STORE_FPR(6)
++  STORE_FPR(7)
++  STORE_FPR(8)
++  STORE_FPR(9)
++  STORE_FPR(10)
++  STORE_FPR(11)
++  STORE_FPR(12)
++  STORE_FPR(13)
++  STORE_FPR(14)
++  STORE_FPR(15)
++  STORE_FPR(16)
++  STORE_FPR(17)
++  STORE_FPR(18)
++  STORE_FPR(19)
++  STORE_FPR(20)
++  STORE_FPR(21)
++  STORE_FPR(22)
++  STORE_FPR(23)
++  STORE_FPR(24)
++  STORE_FPR(25)
++  STORE_FPR(26)
++  STORE_FPR(27)
++  STORE_FPR(28)
++  STORE_FPR(29)
++  STORE_FPR(30)
++  STORE_FPR(31)
++
++  /* rt_sigprocmask (SIG_BLOCK, NULL, &ucp->uc_sigmask, _NSIG8) */
++  addi.d $a2, $a0, MCONTEXT_SIGMASK_OFFSET
++  li.w  $a1, 0
++  li.w  $a0, 0
++  li.w  $a3, _NSIG / 8
++  li.w  $a7, __NR_rt_sigprocmask
++
++  syscall 0
++
++  /* Return zero for success */
++  move $a0, $zero
++
++ jirl $zero, $ra, 0
++
++  .size breakpad_getcontext, . - breakpad_getcontext
+ #elif defined(__x86_64__)
+ /* The x64 implementation of breakpad_getcontext was derived in part
+    from the implementation of libunwind which requires the following
+diff --git a/src/common/linux/dump_symbols.cc b/src/common/linux/dump_symbols.cc
+index 75a4ceed2735061ad97bca7ef8efabe945869510..eee3c77b097ca0c9440e1f7d6df5fac16d4c79b5 100644
+--- a/src/common/linux/dump_symbols.cc
++++ b/src/common/linux/dump_symbols.cc
+@@ -105,6 +105,9 @@ using google_breakpad::wasteful_vector;
+ #define EM_AARCH64      183
+ #endif
+ 
++#ifndef EM_LOONGARCH
++#define EM_LOONGARCH	258
++#endif
+ //
+ // FDWrapper
+ //
+@@ -370,6 +373,9 @@ bool DwarfCFIRegisterNames(const typename ElfClass::Ehdr* elf_header,
+     case EM_MIPS:
+       *register_names = DwarfCFIToModule::RegisterNames::MIPS();
+       return true;
++    case EM_LOONGARCH:
++      *register_names = DwarfCFIToModule::RegisterNames::LOONGARCH64();
++      return true;
+     case EM_X86_64:
+       *register_names = DwarfCFIToModule::RegisterNames::X86_64();
+       return true;
+@@ -907,6 +913,7 @@ const char* ElfArchitecture(const typename ElfClass::Ehdr* elf_header) {
+     case EM_ARM:        return "arm";
+     case EM_AARCH64:    return "arm64";
+     case EM_MIPS:       return "mips";
++    case EM_LOONGARCH:  return "loongarch64";
+     case EM_PPC64:      return "ppc64";
+     case EM_PPC:        return "ppc";
+     case EM_S390:       return "s390";
+diff --git a/src/common/linux/memory_mapped_file.cc b/src/common/linux/memory_mapped_file.cc
+index 99362945ca88ba496d4b46bd18d37e6fa4adba67..78d9559d73fbdf9db4cfae2c4e6937a61c1fc436 100644
+--- a/src/common/linux/memory_mapped_file.cc
++++ b/src/common/linux/memory_mapped_file.cc
+@@ -33,6 +33,7 @@
+ #include "common/linux/memory_mapped_file.h"
+ 
+ #include <fcntl.h>
++#include <linux/stat.h>
+ #include <sys/mman.h>
+ #if defined(__ANDROID__)
+ #include <sys/stat.h>
+@@ -69,6 +70,12 @@ bool MemoryMappedFile::Map(const char* path, size_t offset) {
+ 
+   struct kernel_stat st;
+   if (sys_fstat(fd, &st) == -1 || st.st_size < 0) {
++#elif defined(__loongarch_lp64)
++
++  struct kernel_statx stx;
++  int flag = 0;
++  flag = AT_NO_AUTOMOUNT | AT_EMPTY_PATH;
++  if (sys_statx(fd, nullptr, flag, STATX_BASIC_STATS, &stx) == -1 || stx.stx_size < 0) {
+ #else
+   struct kernel_stat64 st;
+   if (sys_fstat64(fd, &st) == -1 || st.st_size < 0) {
+@@ -78,7 +85,11 @@ bool MemoryMappedFile::Map(const char* path, size_t offset) {
+   }
+ 
+   // Strangely file size can be negative, but we check above that it is not.
++#if defined(__loongarch_lp64)
++  size_t file_len = static_cast<size_t>(stx.stx_size);
++#else
+   size_t file_len = static_cast<size_t>(st.st_size);
++#endif
+   // If the file does not extend beyond the offset, simply use an empty
+   // MemoryRange and return true. Don't bother to call mmap()
+   // even though mmap() can handle an empty file on some platforms.
+diff --git a/src/common/linux/memory_mapped_file_unittest.cc b/src/common/linux/memory_mapped_file_unittest.cc
+index fad59f40cd1eefe8b14347a0dfe281b4390c9ee4..14fe33afdbc1a2b67622e55991c70854c6e66233 100644
+--- a/src/common/linux/memory_mapped_file_unittest.cc
++++ b/src/common/linux/memory_mapped_file_unittest.cc
+@@ -176,7 +176,11 @@ TEST_F(MemoryMappedFileTest, RemapAfterMap) {
+ TEST_F(MemoryMappedFileTest, MapWithOffset) {
+   // Put more data in the test file this time. Offsets can only be
+   // done on page boundaries, so we need a two page file to test this.
++#if defined(__loongarch_lp64)
++  const int page_size = 16384;
++#else
+   const int page_size = 4096;
++#endif
+   char data1[2 * page_size];
+   size_t data1_size = sizeof(data1);
+   for (size_t i = 0; i < data1_size; ++i) {
+diff --git a/src/common/linux/ucontext_constants.h b/src/common/linux/ucontext_constants.h
+index c390508a1af7b4a6bf63831efddf8b96bf55536e..96325846ad57bb13a3d4b6329d85574b37dd34a4 100644
+--- a/src/common/linux/ucontext_constants.h
++++ b/src/common/linux/ucontext_constants.h
+@@ -116,6 +116,19 @@
+ #define  UCONTEXT_SIGMASK_OFFSET   640
+ #endif
+ 
++#elif defined(__loongarch_lp64)
++
++#define MCONTEXT_GREG_SIZE 8
++#define MCONTEXT_FPREG_SIZE 8
++#define MCONTEXT_PC_OFFSET 176
++#define MCONTEXT_GREGS_OFFSET 184
++#define MCONTEXT_FPREGS_OFFSET 464
++#define MCONTEXT_SIGMASK_OFFSET 40
++
++#define STORE_GPR(X) st.d $r##X, $a0, MCONTEXT_GREGS_OFFSET + X * MCONTEXT_GREG_SIZE
++#define STORE_FPR(X) fst.d $f##X, $a0, MCONTEXT_FPREGS_OFFSET + X * MCONTEXT_FPREG_SIZE
++#define STORE_PC st.d $ra, $a0, MCONTEXT_PC_OFFSET
++
+ #elif defined(__x86_64__)
+ 
+ #define MCONTEXT_GREGS_OFFSET     40
+diff --git a/src/common/memory_allocator_unittest.cc b/src/common/memory_allocator_unittest.cc
+index 5803b90d50f863f68303fcf248cf6c40de592f40..71a8f81823a7ebd5d4304f150b8c8129bf303ba8 100644
+--- a/src/common/memory_allocator_unittest.cc
++++ b/src/common/memory_allocator_unittest.cc
+@@ -56,7 +56,7 @@ TEST(PageAllocatorTest, LargeObject) {
+   PageAllocator allocator;
+ 
+   EXPECT_EQ(0U, allocator.pages_allocated());
+-  uint8_t* p = reinterpret_cast<uint8_t*>(allocator.Alloc(10000));
++  uint8_t* p = reinterpret_cast<uint8_t*>(allocator.Alloc(2 * getpagesize() + 1));
+   ASSERT_FALSE(p == NULL);
+   EXPECT_EQ(3U, allocator.pages_allocated());
+   for (unsigned i = 1; i < 10; ++i) {
+diff --git a/src/google_breakpad/common/minidump_cpu_loongarch64.h b/src/google_breakpad/common/minidump_cpu_loongarch64.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..9edeb0c9a379a04a4280addb0a83eb59db29a57d
+--- /dev/null
++++ b/src/google_breakpad/common/minidump_cpu_loongarch64.h
+@@ -0,0 +1,148 @@
++/* Copyright (c) 2013, Google Inc.
++ * All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions are
++ * met:
++ *
++ *     * Redistributions of source code must retain the above copyright
++ * notice, this list of conditions and the following disclaimer.
++ *     * Redistributions in binary form must reproduce the above
++ * copyright notice, this list of conditions and the following disclaimer
++ * in the documentation and/or other materials provided with the
++ * distribution.
++ *     * Neither the name of Google Inc. nor the names of its
++ * contributors may be used to endorse or promote products derived from
++ * this software without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
++
++/* minidump_format.h: A cross-platform reimplementation of minidump-related
++ * portions of DbgHelp.h from the Windows Platform SDK.
++ *
++ * (This is C99 source, please don't corrupt it with C++.)
++ *
++ * This file contains the necessary definitions to read minidump files
++ * produced on LOONGARCH.  These files may be read on any platform provided
++ * that the alignments of these structures on the processing system are
++ * identical to the alignments of these structures on the producing system.
++ * For this reason, precise-sized types are used.  The structures defined
++ * by this file have been laid out to minimize alignment problems by
++ * ensuring that all members are aligned on their natural boundaries.
++ * In some cases, tail-padding may be significant when different ABIs specify
++ * different tail-padding behaviors.  To avoid problems when reading or
++ * writing affected structures, MD_*_SIZE macros are provided where needed,
++ * containing the useful size of the structures without padding.
++ *
++ * Structures that are defined by Microsoft to contain a zero-length array
++ * are instead defined here to contain an array with one element, as
++ * zero-length arrays are forbidden by standard C and C++.  In these cases,
++ * *_minsize constants are provided to be used in place of sizeof.  For a
++ * cleaner interface to these sizes when using C++, see minidump_size.h.
++ *
++ * These structures are also sufficient to populate minidump files.
++ *
++ * Because precise data type sizes are crucial for this implementation to
++ * function properly and portably, a set of primitive types with known sizes
++ * are used as the basis of each structure defined by this file.
++ */
++
++/*
++ * Loongarch64 support
++ */
++
++#ifndef GOOGLE_BREAKPAD_COMMON_MINIDUMP_CPU_LOONGARCH64_H__
++#define GOOGLE_BREAKPAD_COMMON_MINIDUMP_CPU_LOONGARCH64_H__
++
++#define MD_CONTEXT_LOONGARCH64_GPR_COUNT 32
++#define MD_FLOATINGSAVEAREA_LOONGARCH64_FPR_COUNT 32
++
++typedef struct {
++  /* 32 64-bit floating point registers, f0..f31 */
++  uint64_t regs[MD_FLOATINGSAVEAREA_LOONGARCH64_FPR_COUNT];
++  uint64_t fcc;
++  uint32_t fcsr;
++} MDFloatingSaveAreaLoongarch64;
++
++typedef struct {
++  /* The next field determines the layout of the structure, and which parts
++   * of it are populated.
++   */
++  uint32_t context_flags;
++  uint32_t _pad0;
++
++  /* 32 64-bit integer registers, r0..r31.
++   * Note the following fixed uses:
++   *   r3 is the stack pointer.
++   *   r1 is the return address.
++   */
++  uint64_t iregs[MD_CONTEXT_LOONGARCH64_GPR_COUNT];
++
++  uint64_t csr_era;
++
++  /* The next field is included with MD_CONTEXT_LOONGARCH64_FLOATING_POINT. */
++  MDFloatingSaveAreaLoongarch64 float_save;
++
++} MDRawContextLOONGARCH64;
++
++/* Indices into iregs for registers with a dedicated or conventional
++ * purpose.
++ */
++enum MDLoongarchRegisterNumbers {
++  MD_CONTEXT_LOONGARCH64_REG_RA = 1,
++  MD_CONTEXT_LOONGARCH64_REG_TP,
++  MD_CONTEXT_LOONGARCH64_REG_SP,
++  MD_CONTEXT_LOONGARCH64_REG_A0,
++  MD_CONTEXT_LOONGARCH64_REG_A1,
++  MD_CONTEXT_LOONGARCH64_REG_A2,
++  MD_CONTEXT_LOONGARCH64_REG_A3,
++  MD_CONTEXT_LOONGARCH64_REG_A4,
++  MD_CONTEXT_LOONGARCH64_REG_A5,
++  MD_CONTEXT_LOONGARCH64_REG_A6,
++  MD_CONTEXT_LOONGARCH64_REG_A7,
++  MD_CONTEXT_LOONGARCH64_REG_T0,
++  MD_CONTEXT_LOONGARCH64_REG_T1,
++  MD_CONTEXT_LOONGARCH64_REG_T2,
++  MD_CONTEXT_LOONGARCH64_REG_T3,
++  MD_CONTEXT_LOONGARCH64_REG_T4,
++  MD_CONTEXT_LOONGARCH64_REG_T5,
++  MD_CONTEXT_LOONGARCH64_REG_T6,
++  MD_CONTEXT_LOONGARCH64_REG_T7,
++  MD_CONTEXT_LOONGARCH64_REG_T8,
++  MD_CONTEXT_LOONGARCH64_REG_X0,
++  MD_CONTEXT_LOONGARCH64_REG_FP,
++  MD_CONTEXT_LOONGARCH64_REG_S0,
++  MD_CONTEXT_LOONGARCH64_REG_S1,
++  MD_CONTEXT_LOONGARCH64_REG_S2,
++  MD_CONTEXT_LOONGARCH64_REG_S3,
++  MD_CONTEXT_LOONGARCH64_REG_S4,
++  MD_CONTEXT_LOONGARCH64_REG_S5,
++  MD_CONTEXT_LOONGARCH64_REG_S6,
++  MD_CONTEXT_LOONGARCH64_REG_S7,
++  MD_CONTEXT_LOONGARCH64_REG_S8,
++};
++
++/**
++ * Breakpad defines for Loongarch64
++ */
++#define MD_CONTEXT_LOONGARCH64  0x00800000
++#define MD_CONTEXT_LOONGARCH64_INTEGER           (MD_CONTEXT_LOONGARCH64| 0x00000002)
++#define MD_CONTEXT_LOONGARCH64_FLOATING_POINT    (MD_CONTEXT_LOONGARCH64 | 0x00000004)
++
++#define MD_CONTEXT_LOONGARCH64_FULL              (MD_CONTEXT_LOONGARCH64_INTEGER | \
++                                                 MD_CONTEXT_LOONGARCH64_FLOATING_POINT)
++
++#define MD_CONTEXT_LOONGARCH64_ALL               (MD_CONTEXT_LOONGARCH64_INTEGER | \
++                                                 MD_CONTEXT_LOONGARCH64_FLOATING_POINT)
++
++#endif  // GOOGLE_BREAKPAD_COMMON_MINIDUMP_CPU_LOONGARCH64_H__
+diff --git a/src/google_breakpad/common/minidump_format.h b/src/google_breakpad/common/minidump_format.h
+index e236663582edff481510a74b0cd412808c5dfd16..a9c9d4e2304da32baa3d9fe6bb3423fe0a73606a 100644
+--- a/src/google_breakpad/common/minidump_format.h
++++ b/src/google_breakpad/common/minidump_format.h
+@@ -120,6 +120,7 @@ typedef struct {
+ #include "minidump_cpu_ppc64.h"
+ #include "minidump_cpu_sparc.h"
+ #include "minidump_cpu_x86.h"
++#include "minidump_cpu_loongarch64.h"
+ 
+ /*
+  * WinVer.h
+@@ -684,6 +685,7 @@ typedef enum {
+   MD_CPU_ARCHITECTURE_PPC64     = 0x8002, /* Breakpad-defined value for PPC64 */
+   MD_CPU_ARCHITECTURE_ARM64_OLD = 0x8003, /* Breakpad-defined value for ARM64 */
+   MD_CPU_ARCHITECTURE_MIPS64    = 0x8004, /* Breakpad-defined value for MIPS64 */
++  MD_CPU_ARCHITECTURE_LOONGARCH64 = 0x8005, /* Breakpad-defined value for LOONGARCH64 */
+   MD_CPU_ARCHITECTURE_UNKNOWN   = 0xffff  /* PROCESSOR_ARCHITECTURE_UNKNOWN */
+ } MDCPUArchitecture;
+ 
+diff --git a/src/google_breakpad/processor/dump_context.h b/src/google_breakpad/processor/dump_context.h
+index df80bf7ef75f147ab1c75f65facee26989673435..5bc051b9bfa3469b208f20800216b443e7abb1aa 100644
+--- a/src/google_breakpad/processor/dump_context.h
++++ b/src/google_breakpad/processor/dump_context.h
+@@ -62,6 +62,7 @@ class DumpContext : public DumpObject {
+   const MDRawContextPPC64* GetContextPPC64() const;
+   const MDRawContextSPARC* GetContextSPARC() const;
+   const MDRawContextX86*   GetContextX86() const;
++  const MDRawContextLOONGARCH64*  GetContextLOONGARCH64() const;
+ 
+   // A convenience method to get the instruction pointer out of the
+   // MDRawContext, since it varies per-CPU architecture.
+@@ -87,6 +88,7 @@ class DumpContext : public DumpObject {
+   void SetContextARM(MDRawContextARM* arm);
+   void SetContextARM64(MDRawContextARM64* arm64);
+   void SetContextMIPS(MDRawContextMIPS* ctx_mips);
++  void SetContextLOONGARCH64(MDRawContextLOONGARCH64* loongarch64);
+ 
+   // Free the CPU-specific context structure.
+   void FreeContext();
+@@ -105,6 +107,7 @@ class DumpContext : public DumpObject {
+     MDRawContextARM*   arm;
+     MDRawContextARM64* arm64;
+     MDRawContextMIPS*  ctx_mips;
++    MDRawContextLOONGARCH64* loongarch64;
+   } context_;
+ 
+   // Store this separately because of the weirdo AMD64 context
+diff --git a/src/google_breakpad/processor/stack_frame_cpu.h b/src/google_breakpad/processor/stack_frame_cpu.h
+index 24e28ca12c0adf3b314e6e32e5fd2c406bf5d3fc..5aff640f5193692c791deebb5d3573a86bcd9075 100644
+--- a/src/google_breakpad/processor/stack_frame_cpu.h
++++ b/src/google_breakpad/processor/stack_frame_cpu.h
+@@ -338,14 +338,6 @@ struct StackFrameARM64 : public StackFrame {
+ };
+ 
+ struct StackFrameMIPS : public StackFrame {  
+-  // MIPS callee save registers for o32 ABI (32bit registers) are: 
+-  // 1. $s0-$s7, 
+-  // 2. $sp, $fp
+-  // 3. $f20-$f31 
+-  // 
+-  // The register structure is available at
+-  // http://en.wikipedia.org/wiki/MIPS_architecture#Compiler_register_usage
+-
+ #define INDEX_MIPS_REG_S0 MD_CONTEXT_MIPS_REG_S0  // 16
+ #define INDEX_MIPS_REG_S7 MD_CONTEXT_MIPS_REG_S7  // 23
+ #define INDEX_MIPS_REG_GP MD_CONTEXT_MIPS_REG_GP  // 28
+@@ -403,6 +395,66 @@ struct StackFrameMIPS : public StackFrame {
+   int context_validity;
+ };
+ 
++struct StackFrameLOONGARCH64 : public StackFrame {
++  enum ContextValidity {
++    CONTEXT_VALID_NONE = 0,
++
++    CONTEXT_VALID_RA = 1UL << 1,
++    CONTEXT_VALID_TP = 1UL << 2,
++    CONTEXT_VALID_SP = 1UL << 3,
++    CONTEXT_VALID_A0 = 1UL << 4,
++    CONTEXT_VALID_A1 = 1UL << 5,
++    CONTEXT_VALID_A2 = 1UL << 6,
++    CONTEXT_VALID_A3 = 1UL << 7,
++    CONTEXT_VALID_A4 = 1UL << 8,
++    CONTEXT_VALID_A5 = 1UL << 9,
++    CONTEXT_VALID_A6 = 1UL << 10,
++    CONTEXT_VALID_A7 = 1UL << 11,
++    CONTEXT_VALID_T0 = 1UL << 12,
++    CONTEXT_VALID_T1 = 1UL << 13,
++    CONTEXT_VALID_T2 = 1UL << 14,
++    CONTEXT_VALID_T3 = 1UL << 15,
++    CONTEXT_VALID_T4 = 1UL << 16,
++    CONTEXT_VALID_T5 = 1UL << 17,
++    CONTEXT_VALID_T6 = 1UL << 18,
++    CONTEXT_VALID_T7 = 1UL << 19,
++    CONTEXT_VALID_T8 = 1UL << 20,
++    CONTEXT_VALID_X0 = 1UL << 21,
++    CONTEXT_VALID_FP = 1UL << 22,
++    CONTEXT_VALID_S0 = 1UL << 23,
++    CONTEXT_VALID_S1 = 1UL << 24,
++    CONTEXT_VALID_S2 = 1UL << 25,
++    CONTEXT_VALID_S3 = 1UL << 26,
++    CONTEXT_VALID_S4 = 1UL << 27,
++    CONTEXT_VALID_S5 = 1UL << 28,
++    CONTEXT_VALID_S6 = 1UL << 29,
++    CONTEXT_VALID_S7 = 1UL << 30,
++    CONTEXT_VALID_S8 = 1UL << 31,
++
++    CONTEXT_VALID_PC = 1UL << 32,
++    CONTEXT_VALID_ALL = ~CONTEXT_VALID_NONE
++  };
++
++  // Return the ContextValidity flag for register rN.
++  static ContextValidity RegisterValidFlag(int n) {
++    return ContextValidity(1 << n);
++  }
++
++  StackFrameLOONGARCH64() : context(), context_validity(CONTEXT_VALID_NONE) {}
++
++  // Register state. This is only fully valid for the topmost frame in a
++  // stack. In other frames, which registers are present depends on what
++  // debugging information were available. Refer to 'context_validity' below.
++  MDRawContextLOONGARCH64 context;
++
++  // For each register in context whose value has been recovered,
++  // the corresponding CONTEXT_VALID_ bit in 'context_validity' is set.
++  //
++  // context_validity's type should actually be ContextValidity, but
++  // type long is used instead. It contains CONTEXT_VALID_PC.
++  long context_validity;
++};
++
+ }  // namespace google_breakpad
+ 
+ #endif  // GOOGLE_BREAKPAD_PROCESSOR_STACK_FRAME_CPU_H__
+diff --git a/src/processor/dump_context.cc b/src/processor/dump_context.cc
+index da531b74d0dfbfdf3660c5d049a1aff0d4fbc481..804803b16443f9bad258c7169bd0f971983ec00b 100644
+--- a/src/processor/dump_context.cc
++++ b/src/processor/dump_context.cc
+@@ -140,6 +140,15 @@ const MDRawContextMIPS* DumpContext::GetContextMIPS() const {
+   return context_.ctx_mips;
+ }
+ 
++const MDRawContextLOONGARCH64* DumpContext::GetContextLOONGARCH64() const {
++  if (GetContextCPU() != MD_CONTEXT_LOONGARCH64) {
++    BPLOG(ERROR) << "DumpContext cannot get LOONGARCH64 context";
++    return NULL;
++  }
++
++  return context_.loongarch64;
++}
++
+ bool DumpContext::GetInstructionPointer(uint64_t* ip) const {
+   BPLOG_IF(ERROR, !ip) << "DumpContext::GetInstructionPointer requires |ip|";
+   assert(ip);
+@@ -176,6 +185,9 @@ bool DumpContext::GetInstructionPointer(uint64_t* ip) const {
+   case MD_CONTEXT_MIPS64:
+     *ip = GetContextMIPS()->epc;
+     break;
++  case MD_CONTEXT_LOONGARCH64:
++    *ip = GetContextLOONGARCH64()->csr_era;
++    break;
+   default:
+     // This should never happen.
+     BPLOG(ERROR) << "Unknown CPU architecture in GetInstructionPointer";
+@@ -220,6 +232,8 @@ bool DumpContext::GetStackPointer(uint64_t* sp) const {
+   case MD_CONTEXT_MIPS64:
+     *sp = GetContextMIPS()->iregs[MD_CONTEXT_MIPS_REG_SP];
+     break;
++  case MD_CONTEXT_LOONGARCH64:
++   *sp = GetContextLOONGARCH64()->iregs[MD_CONTEXT_LOONGARCH64_REG_SP];
+   default:
+     // This should never happen.
+     BPLOG(ERROR) << "Unknown CPU architecture in GetStackPointer";
+@@ -264,6 +278,10 @@ void DumpContext::SetContextMIPS(MDRawContextMIPS* ctx_mips) {
+   context_.ctx_mips = ctx_mips;
+ }
+ 
++void DumpContext::SetContextLOONGARCH64(MDRawContextLOONGARCH64* loongarch64) {
++  context_.loongarch64 = loongarch64;
++}
++
+ void DumpContext::FreeContext() {
+   switch (GetContextCPU()) {
+     case MD_CONTEXT_X86:
+@@ -299,6 +317,10 @@ void DumpContext::FreeContext() {
+       delete context_.ctx_mips;
+       break;
+ 
++    case MD_CONTEXT_LOONGARCH64:
++      delete context_.loongarch64;
++      break;
++
+     default:
+       // There is no context record (valid_ is false) or there's a
+       // context record for an unknown CPU (shouldn't happen, only known
+@@ -655,6 +677,29 @@ void DumpContext::Print() {
+       break;
+     }
+ 
++    case MD_CONTEXT_LOONGARCH64: {
++      const MDRawContextLOONGARCH64* context_loongarch = GetContextLOONGARCH64();
++      printf("MDRawContextLOONGARCH64\n");
++      printf("  context_flags        = 0x%x\n",
++             context_loongarch->context_flags);
++      for (int ireg_index = 0;
++           ireg_index < MD_CONTEXT_LOONGARCH64_GPR_COUNT;
++           ++ireg_index) {
++      printf("  iregs[%2d]           = 0x%" PRIx64 "\n",
++               ireg_index, context_loongarch->iregs[ireg_index]);
++      }
++
++      printf("  csr_era                  = 0x%" PRIx64 "\n",
++             context_loongarch->csr_era);
++      for (int fpr_index = 0;
++           fpr_index < MD_FLOATINGSAVEAREA_LOONGARCH64_FPR_COUNT;
++           ++fpr_index) {
++        printf("  float_save.regs[%2d] = 0x%" PRIx64 "\n",
++               fpr_index, context_loongarch->float_save.regs[fpr_index]);
++      }
++      break;
++    }
++
+     default: {
+       break;
+     }
+diff --git a/src/processor/minidump.cc b/src/processor/minidump.cc
+index db7a4a16a6dafe81218d678636ea8696e70a7486..d27f5a09003dc32964b3861ccd40b4f7db058ebf 100644
+--- a/src/processor/minidump.cc
++++ b/src/processor/minidump.cc
+@@ -96,6 +96,8 @@ bool IsContextSizeUnique(uint32_t context_size) {
+     num_matching_contexts++;
+   if (context_size == sizeof(MDRawContextMIPS))
+     num_matching_contexts++;
++  if (context_size == sizeof(MDRawContextLOONGARCH64))
++    num_matching_contexts++;
+   return num_matching_contexts == 1;
+ }
+ 
+@@ -1170,6 +1172,57 @@ bool MinidumpContext::Read(uint32_t expected_size) {
+         break;
+       }
+ 
++      case MD_CONTEXT_LOONGARCH64: {
++        if (expected_size != sizeof(MDRawContextLOONGARCH64)) {
++          BPLOG(ERROR) << "MinidumpContext LOONGARCH64 size mismatch, "
++                       << expected_size
++                       << " != "
++                       << sizeof(MDRawContextLOONGARCH64);
++          return false;
++        }
++
++        scoped_ptr<MDRawContextLOONGARCH64> context_loongarch(new MDRawContextLOONGARCH64());
++
++        // Set the context_flags member, which has already been read, and
++        // read the rest of the structure beginning with the first member
++        // after context_flags.
++        context_loongarch->context_flags = context_flags;
++
++        size_t flags_size = sizeof(context_loongarch->context_flags);
++        uint8_t* context_after_flags =
++            reinterpret_cast<uint8_t*>(context_loongarch.get()) + flags_size;
++        if (!minidump_->ReadBytes(context_after_flags,
++                                  sizeof(MDRawContextLOONGARCH64) - flags_size)) {
++          BPLOG(ERROR) << "MinidumpContext could not read LOONGARCH64 context";
++          return false;
++        }
++
++        // Do this after reading the entire MDRawContext structure because
++        // GetSystemInfo may seek minidump to a new position.
++        if (!CheckAgainstSystemInfo(cpu_type)) {
++          BPLOG(ERROR) << "MinidumpContext LOONGARCH64 does not match system info";
++          return false;
++        }
++
++        if (minidump_->swap()) {
++          // context_loongarch->context_flags was already swapped.
++          for (int ireg_index = 0;
++               ireg_index < MD_CONTEXT_LOONGARCH64_GPR_COUNT;
++               ++ireg_index) {
++            Swap(&context_loongarch->iregs[ireg_index]);
++          }
++          Swap(&context_loongarch->csr_era);
++          for (int fpr_index = 0;
++               fpr_index < MD_FLOATINGSAVEAREA_LOONGARCH64_FPR_COUNT;
++               ++fpr_index) {
++            Swap(&context_loongarch->float_save.regs[fpr_index]);
++          }
++        }
++        SetContextLOONGARCH64(context_loongarch.release());
++
++        break;
++      }
++
+       default: {
+         // Unknown context type - Don't log as an error yet. Let the
+         // caller work that out.
+@@ -1262,6 +1315,11 @@ bool MinidumpContext::CheckAgainstSystemInfo(uint32_t context_cpu_type) {
+       if (system_info_cpu_type == MD_CPU_ARCHITECTURE_MIPS64)
+         return_value = true;
+       break;
++
++    case MD_CONTEXT_LOONGARCH64:
++      if (system_info_cpu_type == MD_CPU_ARCHITECTURE_LOONGARCH64)
++	return_value = true;
++      break;
+   }
+ 
+   BPLOG_IF(ERROR, !return_value) << "MinidumpContext CPU " <<
+@@ -5333,6 +5391,8 @@ bool Minidump::GetContextCPUFlagsFromSystemInfo(uint32_t* context_cpu_flags) {
+     GetSystemInfo() ? GetSystemInfo()->system_info() : NULL;
+ 
+   if (system_info != NULL) {
++           BPLOG(INFO) << "system_info" <<
++          system_info;
+     switch (system_info->processor_architecture) {
+       case MD_CPU_ARCHITECTURE_X86:
+         *context_cpu_flags = MD_CONTEXT_X86;
+@@ -5343,6 +5403,9 @@ bool Minidump::GetContextCPUFlagsFromSystemInfo(uint32_t* context_cpu_flags) {
+       case MD_CPU_ARCHITECTURE_MIPS64:
+         *context_cpu_flags = MD_CONTEXT_MIPS64;
+         break;
++      case MD_CPU_ARCHITECTURE_LOONGARCH64:
++        *context_cpu_flags = MD_CONTEXT_LOONGARCH64;
++        break;
+       case MD_CPU_ARCHITECTURE_ALPHA:
+         *context_cpu_flags = MD_CONTEXT_ALPHA;
+         break;
+diff --git a/src/processor/minidump_processor.cc b/src/processor/minidump_processor.cc
+index e6875c9ea326922d29ef75eb4da4d2f772625487..545cb8ec999d1daa94f279d014a6627509b60c91 100644
+--- a/src/processor/minidump_processor.cc
++++ b/src/processor/minidump_processor.cc
+@@ -416,6 +416,7 @@ static uint64_t GetAddressForArchitecture(const MDCPUArchitecture architecture,
+   switch (architecture) {
+     case MD_CPU_ARCHITECTURE_X86:
+     case MD_CPU_ARCHITECTURE_MIPS:
++    case MD_CPU_ARCHITECTURE_LOONGARCH64:
+     case MD_CPU_ARCHITECTURE_PPC:
+     case MD_CPU_ARCHITECTURE_SHX:
+     case MD_CPU_ARCHITECTURE_ARM:
+@@ -625,6 +626,12 @@ bool MinidumpProcessor::GetCPUInfo(Minidump* dump, SystemInfo* info) {
+       break;
+     }
+ 
++     case MD_CPU_ARCHITECTURE_LOONGARCH64: {
++      info->cpu = "loongarch64";
++      break;
++    }
++
++
+     default: {
+       // Assign the numeric architecture ID into the CPU string.
+       char cpu_string[7];
+diff --git a/src/processor/stackwalk_common.cc b/src/processor/stackwalk_common.cc
+index c1e17084d3d63bd6f0343825c2cd5f50c0581d33..140669e5b50abac94aea7f6292ced15b4e0e9ad4 100644
+--- a/src/processor/stackwalk_common.cc
++++ b/src/processor/stackwalk_common.cc
+@@ -637,6 +637,147 @@ static void PrintStack(const CallStack* stack,
+           sequence = PrintRegister64(
+               "s7", frame_mips->context.iregs[MD_CONTEXT_MIPS_REG_S7],
+               sequence);
++      } else if ((cpu == "loongarch64")) {
++        const StackFrameLOONGARCH64* frame_loongarch =
++            reinterpret_cast<const StackFrameLOONGARCH64*>(frame);
++
++	if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_RA)
++          sequence = PrintRegister64(
++              "ra", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_RA],
++              sequence);
++	if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_TP)
++          sequence = PrintRegister64(
++              "tp", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_TP],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_SP)
++          sequence = PrintRegister64(
++              "sp", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP],
++              sequence);
++
++        // Save registers a0-a7
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_A0)
++          sequence = PrintRegister64(
++              "a0", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_A0],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_A1)
++          sequence = PrintRegister64(
++              "a1", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_A1],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_A2)
++          sequence = PrintRegister64(
++              "a2", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_A2],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_A3)
++          sequence = PrintRegister64(
++              "a3", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_A3],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_A4)
++          sequence = PrintRegister64(
++              "a4", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_A4],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_A5)
++          sequence = PrintRegister64(
++              "a5", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_A5],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_A6)
++          sequence = PrintRegister64(
++              "a6", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_A6],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_A7)
++          sequence = PrintRegister64(
++              "a7", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_A7],
++              sequence);
++
++        // Save registers t0-s8
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_T0)
++          sequence = PrintRegister64(
++              "t0", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_T0],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_T1)
++          sequence = PrintRegister64(
++              "t1", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_T1],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_T2)
++          sequence = PrintRegister64(
++              "t2", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_T2],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_T3)
++          sequence = PrintRegister64(
++              "t3", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_T3],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_T4)
++          sequence = PrintRegister64(
++              "t4", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_T4],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_T5)
++          sequence = PrintRegister64(
++              "t5", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_T5],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_T6)
++          sequence = PrintRegister64(
++              "t6", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_T6],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_T7)
++          sequence = PrintRegister64(
++              "t7", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_T7],
++              sequence);
++	if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_T8)
++          sequence = PrintRegister64(
++              "t8", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_T8],
++              sequence);
++
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_X0)
++          sequence = PrintRegister64(
++              "x0", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_X0],
++              sequence);
++
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_FP)
++          sequence = PrintRegister64(
++              "fp", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_FP],
++              sequence);
++
++        // Save registers s0-s8
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_S0)
++          sequence = PrintRegister64(
++              "s0", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_S0],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_S1)
++          sequence = PrintRegister64(
++              "s1", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_S1],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_S2)
++          sequence = PrintRegister64(
++              "s2", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_S2],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_S3)
++          sequence = PrintRegister64(
++              "s3", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_S3],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_S4)
++          sequence = PrintRegister64(
++              "s4", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_S4],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_S5)
++          sequence = PrintRegister64(
++              "s5", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_S5],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_S6)
++          sequence = PrintRegister64(
++              "s6", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_S6],
++              sequence);
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_S7)
++          sequence = PrintRegister64(
++              "s7", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_S7],
++              sequence);
++
++        if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_S8)
++          sequence = PrintRegister64(
++              "s8", frame_loongarch->context.iregs[MD_CONTEXT_LOONGARCH64_REG_S8],
++              sequence);
++
++	if (frame_loongarch->context_validity & StackFrameLOONGARCH64::CONTEXT_VALID_PC)
++          sequence = PrintRegister64("pc", frame_loongarch->context.csr_era, sequence);
++
+       }
+     }
+     printf("\n    Found by: %s\n", frame->trust_description().c_str());
+diff --git a/src/processor/stackwalker.cc b/src/processor/stackwalker.cc
+index e123b0277671eca3d6fe85942b70edbf8de65efd..515efe68b5a2fe4f398d7de66619357804556ecd 100644
+--- a/src/processor/stackwalker.cc
++++ b/src/processor/stackwalker.cc
+@@ -55,6 +55,7 @@
+ #include "processor/stackwalker_arm.h"
+ #include "processor/stackwalker_arm64.h"
+ #include "processor/stackwalker_mips.h"
++#include "processor/stackwalker_loongarch64.h"
+ 
+ namespace google_breakpad {
+ 
+@@ -253,6 +254,12 @@ Stackwalker* Stackwalker::StackwalkerForCPU(
+                                             memory, modules, frame_symbolizer);
+       break;
+ 
++    case MD_CONTEXT_LOONGARCH64:
++      cpu_stackwalker = new StackwalkerLOONGARCH64(system_info,
++                                            context->GetContextLOONGARCH64(),
++                                            memory, modules, frame_symbolizer);
++      break;
++
+     case MD_CONTEXT_ARM:
+     {
+       int fp_register = -1;
+diff --git a/src/processor/stackwalker_loongarch64.cc b/src/processor/stackwalker_loongarch64.cc
+new file mode 100644
+index 0000000000000000000000000000000000000000..40176bae7959e84328a9b45f2ef2a0dd8416687b
+--- /dev/null
++++ b/src/processor/stackwalker_loongarch64.cc
+@@ -0,0 +1,289 @@
++// Copyright (c) 2013 Google Inc.
++// All rights reserved.
++//
++// Redistribution and use in source and binary forms, with or without
++// modification, are permitted provided that the following conditions are
++// met:
++//
++//     * Redistributions of source code must retain the above copyright
++// notice, this list of conditions and the following disclaimer.
++//     * Redistributions in binary form must reproduce the above
++// copyright notice, this list of conditions and the following disclaimer
++// in the documentation and/or other materials provided with the
++// distribution.
++//     * Neither the name of Google Inc. nor the names of its
++// contributors may be used to endorse or promote products derived from
++// this software without specific prior written permission.
++//
++// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++// stackwalker_loongarch64.cc: LOONGARCH64-specific stackwalker.
++//
++// See stackwalker_loongarch64.h for documentation.
++
++#include "common/scoped_ptr.h"
++#include "google_breakpad/processor/call_stack.h"
++#include "google_breakpad/processor/code_modules.h"
++#include "google_breakpad/processor/memory_region.h"
++#include "google_breakpad/processor/source_line_resolver_interface.h"
++#include "google_breakpad/processor/stack_frame_cpu.h"
++#include "processor/cfi_frame_info.h"
++#include "processor/logging.h"
++#include "processor/postfix_evaluator-inl.h"
++#include "processor/stackwalker_loongarch64.h"
++#include "processor/windows_frame_info.h"
++#include "google_breakpad/common/minidump_cpu_loongarch64.h"
++
++namespace google_breakpad {
++
++StackwalkerLOONGARCH64::StackwalkerLOONGARCH64(const SystemInfo* system_info,
++                                 const MDRawContextLOONGARCH64* context,
++                                 MemoryRegion* memory,
++                                 const CodeModules* modules,
++                                 StackFrameSymbolizer* resolver_helper)
++: Stackwalker(system_info, memory, modules, resolver_helper),
++  context_(context) {
++  if (memory_) {
++    if (0xffffffffffffffff - memory_->GetBase() < memory_->GetSize() - 1) {
++      BPLOG(ERROR) << "Memory out of range for stackwalking loongarch64: "
++          << HexString(memory_->GetBase())
++          << "+"
++          << HexString(memory_->GetSize());
++      memory_ = NULL;
++    }
++  }
++}
++
++StackFrame* StackwalkerLOONGARCH64::GetContextFrame() {
++  if (!context_) {
++    BPLOG(ERROR) << "Can't get context frame without context.";
++    return NULL;
++  }
++
++  StackFrameLOONGARCH64* frame = new StackFrameLOONGARCH64();
++
++  // The instruction pointer is stored directly in a register, so pull it
++  // straight out of the CPU context structure.
++  frame->context = *context_;
++  frame->context_validity = StackFrameLOONGARCH64::CONTEXT_VALID_ALL;
++  frame->trust = StackFrame::FRAME_TRUST_CONTEXT;
++  frame->instruction = frame->context.csr_era;
++
++  return frame;
++}
++
++// Register names for loongarch.
++static const char* const kRegisterNames[] = {
++    "$zero", "$ra",  "$tp",  "$sp",  "$a0",  "$a1",  "$a2",  "$a3",
++    "$a4",   "$a5",  "$a6",  "$a7",  "$t0",  "$t1",  "$t2",  "$t3",
++    "$t4",   "$t5",  "$t6",  "$t7",  "$t8",  "$x",   "$fp",  "$s0",
++    "$s1",   "$s2",  "$s3",  "$s4",  "$s5",  "$s6",  "$s7",  "$s8",
++    "$fa0",  "$fa1", "$fa2", "$fa3", "$fa4", "$fa5", "$fa6", "$fa7",
++    "$ft0",  "$ft1", "$ft2", "$ft3", "$ft4", "$ft5", "$ft6", "$ft7",
++    "$ft8",  "$ft9", "$ft10","$ft11","$ft12","$ft13","$ft14","$ft15",
++    "$fs0",  "$fs1", "$fs2", "$fs3", "$fs4", "$fs5", "$fs6",  "$fs7",
++    NULL
++  // TODO(gordanac): add float point save registers
++};
++
++StackFrameLOONGARCH64* StackwalkerLOONGARCH64::GetCallerByCFIFrameInfo(
++    const vector<StackFrame*>& frames,
++    CFIFrameInfo* cfi_frame_info) {
++  StackFrameLOONGARCH64* last_frame = static_cast<StackFrameLOONGARCH64*>(frames.back());
++
++  uint64_t pc = 0;
++
++  // Populate a dictionary with the valid register values in last_frame.
++  CFIFrameInfo::RegisterValueMap<uint64_t> callee_registers;
++  // Use the STACK CFI data to recover the caller's register values.
++  CFIFrameInfo::RegisterValueMap<uint64_t> caller_registers;
++
++  for (int i = 0; kRegisterNames[i]; ++i) {
++    caller_registers[kRegisterNames[i]] = last_frame->context.iregs[i];
++    callee_registers[kRegisterNames[i]] = last_frame->context.iregs[i];
++  }
++
++  if (!cfi_frame_info->FindCallerRegs(callee_registers, *memory_,
++      &caller_registers))  {
++    return NULL;
++  }
++
++  CFIFrameInfo::RegisterValueMap<uint64_t>::const_iterator entry =
++      caller_registers.find(".cfa");
++
++  if (entry != caller_registers.end()) {
++    caller_registers["$sp"] = entry->second;
++  }
++
++  entry = caller_registers.find(".ra");
++  if (entry != caller_registers.end()) {
++    caller_registers["$ra"] = entry->second;
++    pc = entry->second - sizeof(pc);
++  }
++  caller_registers["$pc"] = pc;
++  // Construct a new stack frame given the values the CFI recovered.
++  scoped_ptr<StackFrameLOONGARCH64> frame(new StackFrameLOONGARCH64());
++
++  for (int i = 0; kRegisterNames[i]; ++i) {
++    CFIFrameInfo::RegisterValueMap<uint64_t>::const_iterator caller_entry =
++        caller_registers.find(kRegisterNames[i]);
++
++    if (caller_entry != caller_registers.end()) {
++      // The value of this register is recovered; fill the context with the
++      // value from caller_registers.
++      frame->context.iregs[i] = caller_entry->second;
++      frame->context_validity |= StackFrameLOONGARCH64::RegisterValidFlag(i);
++    } else {
++      // If the STACK CFI data doesn't mention some callee-save register, and
++      // it is valid in the callee, assume the callee has not yet changed it.
++      // Calee-save registers according to the loongarch psABI specification are:
++      // $s0 to $s8, $fp, $sp
++      frame->context.iregs[i] = last_frame->context.iregs[i];
++      frame->context_validity |= StackFrameLOONGARCH64::CONTEXT_VALID_S0;
++      frame->context_validity |= StackFrameLOONGARCH64::CONTEXT_VALID_S1;
++      frame->context_validity |= StackFrameLOONGARCH64::CONTEXT_VALID_S2;
++      frame->context_validity |= StackFrameLOONGARCH64::CONTEXT_VALID_S3;
++      frame->context_validity |= StackFrameLOONGARCH64::CONTEXT_VALID_S4;
++      frame->context_validity |= StackFrameLOONGARCH64::CONTEXT_VALID_S5;
++      frame->context_validity |= StackFrameLOONGARCH64::CONTEXT_VALID_S6;
++      frame->context_validity |= StackFrameLOONGARCH64::CONTEXT_VALID_S7;
++      frame->context_validity |= StackFrameLOONGARCH64::CONTEXT_VALID_S8;
++      frame->context_validity |= StackFrameLOONGARCH64::CONTEXT_VALID_FP;
++      frame->context_validity |= StackFrameLOONGARCH64::CONTEXT_VALID_SP;
++    }
++  }
++
++  frame->context.csr_era = caller_registers["$pc"];
++  frame->instruction = caller_registers["$pc"];
++  frame->context_validity |= StackFrameLOONGARCH64::CONTEXT_VALID_PC;
++
++  frame->context.iregs[MD_CONTEXT_LOONGARCH64_REG_RA] = caller_registers["$ra"];
++  frame->context_validity |= StackFrameLOONGARCH64::CONTEXT_VALID_RA;
++
++  frame->trust = StackFrame::FRAME_TRUST_CFI;
++
++  return frame.release();
++}
++
++StackFrame* StackwalkerLOONGARCH64::GetCallerFrame(const CallStack* stack,
++                                            bool stack_scan_allowed) {
++  if (!memory_ || !stack) {
++    BPLOG(ERROR) << "Can't get caller frame without memory or stack";
++    return NULL;
++  }
++
++  const vector<StackFrame*>& frames = *stack->frames();
++  StackFrameLOONGARCH64* last_frame = static_cast<StackFrameLOONGARCH64*>(frames.back());
++  scoped_ptr<StackFrameLOONGARCH64> new_frame;
++
++  // See if there is DWARF call frame information covering this address.
++  scoped_ptr<CFIFrameInfo> cfi_frame_info(
++    frame_symbolizer_->FindCFIFrameInfo(last_frame));
++  if (cfi_frame_info.get())
++    new_frame.reset(GetCallerByCFIFrameInfo(frames, cfi_frame_info.get()));
++
++  // If caller frame is not found in CFI try analyzing the stack.
++  if (stack_scan_allowed && !new_frame.get()) {
++    new_frame.reset(GetCallerByStackScan(frames));
++  }
++
++  // If nothing worked, tell the caller.
++  if (!new_frame.get()) {
++    return NULL;
++  }
++
++  // Should we terminate the stack walk? (end-of-stack or broken invariant)
++  if (TerminateWalk(new_frame->context.csr_era,
++                    new_frame->context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP],
++                    last_frame->context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP],
++                    frames.size() == 1)) {
++    return NULL;
++  }
++
++  return new_frame.release();
++}
++
++StackFrameLOONGARCH64* StackwalkerLOONGARCH64::GetCallerByStackScan(
++    const vector<StackFrame*>& frames) {
++  const uint32_t kMaxFrameStackSize = 1024;
++
++  StackFrameLOONGARCH64* last_frame = static_cast<StackFrameLOONGARCH64*>(frames.back());
++
++  uint64_t last_sp = last_frame->context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP];
++  uint64_t caller_pc, caller_sp, caller_fp;
++
++  // Return address cannot be obtained directly.
++  // Force stackwalking.
++
++  // We cannot use frame pointer to get the return address.
++  // We'll scan the stack for a
++  // return address. This can happen if last_frame is executing code
++  // for a module for which we don't have symbols.
++  int count = kMaxFrameStackSize / sizeof(caller_pc);
++
++  do {
++    // Scanning for return address from stack pointer of the last frame.
++    if (!ScanForReturnAddress(last_sp, &caller_sp, &caller_pc, count)) {
++      // If we can't find an instruction pointer even with stack scanning,
++      // give up.
++      BPLOG(ERROR) << " ScanForReturnAddress failed ";
++      return NULL;
++    }
++    // Get $fp stored in the stack frame.
++    if (!memory_->GetMemoryAtAddress(caller_sp - sizeof(caller_pc),
++        &caller_fp)) {
++      BPLOG(INFO) << " GetMemoryAtAddress for fp failed " ;
++      return NULL;
++    }
++
++    count = count - (caller_sp - last_sp) / sizeof(caller_pc);
++    // Now scan the next address in the stack.
++    last_sp = caller_sp + sizeof(caller_pc);
++  } while ((caller_fp - caller_sp >= kMaxFrameStackSize) && count > 0);
++
++  if (!count) {
++    BPLOG(INFO) << " No frame found " ;
++    return NULL;
++  }
++
++  // ScanForReturnAddress found a reasonable return address. Advance
++  // $sp to the location above the one where the return address was
++  // found.
++  caller_sp += sizeof(caller_pc);
++  // caller_pc is actually containing $ra value;
++  // $pc is two instructions before $ra,
++  // so the caller_pc needs to be decremented accordingly.
++  caller_pc -= sizeof(caller_pc);
++
++  // Create a new stack frame (ownership will be transferred to the caller)
++  // and fill it in.
++  StackFrameLOONGARCH64* frame = new StackFrameLOONGARCH64();
++  frame->trust = StackFrame::FRAME_TRUST_SCAN;
++  frame->context = last_frame->context;
++  frame->context.csr_era = caller_pc;
++  frame->context_validity |= StackFrameLOONGARCH64::CONTEXT_VALID_PC;
++  frame->instruction = caller_pc;
++
++  frame->context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP] = caller_sp;
++  frame->context_validity |= StackFrameLOONGARCH64::CONTEXT_VALID_SP;
++  frame->context.iregs[MD_CONTEXT_LOONGARCH64_REG_FP] = caller_fp;
++  frame->context_validity |= StackFrameLOONGARCH64::CONTEXT_VALID_FP;
++
++  frame->context.iregs[MD_CONTEXT_LOONGARCH64_REG_RA] =
++      caller_pc + sizeof(caller_pc);
++  frame->context_validity |= StackFrameLOONGARCH64::CONTEXT_VALID_RA;
++
++  return frame;
++}
++
++}  // namespace google_breakpad
+diff --git a/src/processor/stackwalker_loongarch64.h b/src/processor/stackwalker_loongarch64.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..16991e182ef56a3d973930ad08195a1c5cd1c4ab
+--- /dev/null
++++ b/src/processor/stackwalker_loongarch64.h
+@@ -0,0 +1,83 @@
++// Copyright (c) 2013 Google Inc.
++// All rights reserved.
++//
++// Redistribution and use in source and binary forms, with or without
++// modification, are permitted provided that the following conditions are
++// met:
++//
++//     * Redistributions of source code must retain the above copyright
++// notice, this list of conditions and the following disclaimer.
++//     * Redistributions in binary form must reproduce the above
++// copyright notice, this list of conditions and the following disclaimer
++// in the documentation and/or other materials provided with the
++// distribution.
++//     * Neither the name of Google Inc. nor the names of its
++// contributors may be used to endorse or promote products derived from
++// this software without specific prior written permission.
++//
++// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++// stackwalker_loongarch64.h: LOONGARCH64-specific stackwalker.
++//
++// Provides stack frames given LOONGARCH64 register context and a memory region
++// corresponding to a LOONGARCH64 stack.
++
++#ifndef PROCESSOR_STACKWALKER_LOONGARCH64_H__
++#define PROCESSOR_STACKWALKER_LOONGARCH64_H__
++
++#include "google_breakpad/common/breakpad_types.h"
++#include "google_breakpad/common/minidump_format.h"
++#include "google_breakpad/processor/stackwalker.h"
++#include "google_breakpad/processor/stack_frame_cpu.h"
++#include "processor/cfi_frame_info.h"
++
++namespace google_breakpad {
++
++class CodeModules;
++
++class StackwalkerLOONGARCH64 : public Stackwalker {
++ public:
++  // Context is a loongarch64 context object that gives access to
++  // loongarch64-specific register state corresponding to the innermost
++  // called frame to be included in the stack.  The other arguments are
++  // passed directly through to the base Stackwalker constructor.
++  StackwalkerLOONGARCH64(const SystemInfo* system_info,
++                  const MDRawContextLOONGARCH64* context,
++                  MemoryRegion* memory,
++                  const CodeModules* modules,
++                  StackFrameSymbolizer* frame_symbolizer);
++
++ private:
++  // Implementation of Stackwalker, using loongarch64 context and stack conventions.
++  virtual StackFrame* GetContextFrame();
++  virtual StackFrame* GetCallerFrame(const CallStack* stack,
++                                     bool stack_scan_allowed);
++
++  // Use cfi_frame_info (derived from STACK CFI records) to construct
++  // the frame that called frames.back(). The caller takes ownership
++  // of the returned frame. Return NULL on failure.
++  StackFrameLOONGARCH64* GetCallerByCFIFrameInfo(const vector<StackFrame*>& frames,
++                                          CFIFrameInfo* cfi_frame_info);
++
++  // Scan the stack for plausible return address and frame pointer pair.
++  // The caller takes ownership of the returned frame. Return NULL on failure.
++  StackFrameLOONGARCH64* GetCallerByStackScan(const vector<StackFrame*>& frames);
++
++  // Stores the CPU context corresponding to the innermost stack frame to
++  // be returned by GetContextFrame.
++  const MDRawContextLOONGARCH64* context_;
++};
++
++}  // namespace google_breakpad
++
++#endif  // PROCESSOR_STACKWALKER_LOONGARCH64_H__
+diff --git a/src/processor/stackwalker_loongarch64_unittest.cc b/src/processor/stackwalker_loongarch64_unittest.cc
+new file mode 100644
+index 0000000000000000000000000000000000000000..7a18a94e7abc044641590d8f487d95fad91e2276
+--- /dev/null
++++ b/src/processor/stackwalker_loongarch64_unittest.cc
+@@ -0,0 +1,717 @@
++// Copyright (c) 2013, Google Inc.
++// All rights reserved.
++//
++// Redistribution and use in source and binary forms, with or without
++// modification, are permitted provided that the following conditions are
++// met:
++//
++//     * Redistributions of source code must retain the above copyright
++// notice, this list of conditions and the following disclaimer.
++//     * Redistributions in binary form must reproduce the above
++// copyright notice, this list of conditions and the following disclaimer
++// in the documentation and/or other materials provided with the
++// distribution.
++//     * Neither the name of Google Inc. nor the names of its
++// contributors may be used to endorse or promote products derived from
++// this software without specific prior written permission.
++//
++// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++// Original author: Veljko Mihailovic <veljko.mihailovic@imgtec.com>
++
++// stackwalker_loongarch64_unittest.cc: Unit tests for StackwalkerLOONGARCH64
++// class for loongarch64 platforms.
++
++#include <string.h>
++#include <string>
++#include <vector>
++
++#include "breakpad_googletest_includes.h"
++#include "common/test_assembler.h"
++#include "common/using_std_string.h"
++#include "google_breakpad/common/minidump_format.h"
++#include "google_breakpad/processor/basic_source_line_resolver.h"
++#include "google_breakpad/processor/call_stack.h"
++#include "google_breakpad/processor/code_module.h"
++#include "google_breakpad/processor/source_line_resolver_interface.h"
++#include "google_breakpad/processor/stack_frame_cpu.h"
++#include "processor/stackwalker_unittest_utils.h"
++#include "processor/stackwalker_loongarch64.h"
++#include "processor/windows_frame_info.h"
++
++using google_breakpad::BasicSourceLineResolver;
++using google_breakpad::CallStack;
++using google_breakpad::CodeModule;
++using google_breakpad::StackFrameSymbolizer;
++using google_breakpad::StackFrame;
++using google_breakpad::StackFrameLOONGARCH64;
++using google_breakpad::Stackwalker;
++using google_breakpad::StackwalkerLOONGARCH64;
++using google_breakpad::SystemInfo;
++using google_breakpad::WindowsFrameInfo;
++using google_breakpad::test_assembler::kLittleEndian;
++using google_breakpad::test_assembler::Label;
++using google_breakpad::test_assembler::Section;
++using std::vector;
++using testing::_;
++using testing::AnyNumber;
++using testing::DoAll;
++using testing::Return;
++using testing::SetArgumentPointee;
++using testing::Test;
++
++class StackwalkerLOONGARCH64Fixture {
++ public:
++  StackwalkerLOONGARCH64Fixture()
++    : stack_section(kLittleEndian),
++      // Give the two modules reasonable standard locations and names
++      // for tests to play with.
++      module1(0x00400000, 0x10000, "module1", "version1"),
++      module2(0x00500000, 0x10000, "module2", "version2") {
++    // Identify the system as a Linux system.
++    system_info.os = "Linux";
++    system_info.os_short = "linux";
++    system_info.os_version = "Observant Opossum";  // Jealous Jellyfish
++    system_info.cpu = "loongarch64";
++    system_info.cpu_info = "";
++
++    // Put distinctive values in the raw CPU context.
++    BrandContext(&raw_context);
++
++    // Create some modules with some stock debugging information.
++    modules.Add(&module1);
++    modules.Add(&module2);
++
++    // By default, none of the modules have symbol info; call
++    // SetModuleSymbols to override this.
++    EXPECT_CALL(supplier, GetCStringSymbolData(_, _, _, _, _))
++      .WillRepeatedly(Return(MockSymbolSupplier::NOT_FOUND));
++
++    // Avoid GMOCK WARNING "Uninteresting mock function call - returning
++    // directly" for FreeSymbolData().
++    EXPECT_CALL(supplier, FreeSymbolData(_)).Times(AnyNumber());
++
++    // Reset max_frames_scanned since it's static.
++    Stackwalker::set_max_frames_scanned(1024);
++  }
++
++  // Set the Breakpad symbol information that supplier should return for
++  // MODULE to INFO.
++  void SetModuleSymbols(MockCodeModule* module, const string& info) {
++    size_t buffer_size;
++    char* buffer = supplier.CopySymbolDataAndOwnTheCopy(info, &buffer_size);
++    EXPECT_CALL(supplier, GetCStringSymbolData(module, &system_info, _, _, _))
++      .WillRepeatedly(DoAll(SetArgumentPointee<3>(buffer),
++                            SetArgumentPointee<4>(buffer_size),
++                            Return(MockSymbolSupplier::FOUND)));
++  }
++
++  // Populate stack_region with the contents of stack_section. Use
++  // stack_section.start() as the region's starting address.
++  void RegionFromSection() {
++    string contents;
++    ASSERT_TRUE(stack_section.GetContents(&contents));
++    stack_region.Init(stack_section.start().Value(), contents);
++  }
++
++  // Fill RAW_CONTEXT with pseudo-random data, for round-trip checking.
++  void BrandContext(MDRawContextLOONGARCH64* raw_context) {
++    uint8_t x = 173;
++    for (size_t i = 0; i < sizeof(*raw_context); ++i)
++      reinterpret_cast<uint8_t*>(raw_context)[i] = (x += 17);
++  }
++
++  SystemInfo system_info;
++  MDRawContextLOONGARCH64 raw_context;
++  Section stack_section;
++  MockMemoryRegion stack_region;
++  MockCodeModule module1;
++  MockCodeModule module2;
++  MockCodeModules modules;
++  MockSymbolSupplier supplier;
++  BasicSourceLineResolver resolver;
++  CallStack call_stack;
++  const vector<StackFrame*>* frames;
++};
++
++class SanityCheck: public StackwalkerLOONGARCH64Fixture, public Test { };
++
++TEST_F(SanityCheck, NoResolver) {
++  raw_context.context_flags =
++      raw_context.context_flags | MD_CONTEXT_LOONGARCH64_FULL;
++  stack_section.start() = 0x80000000;
++  stack_section.D64(0).D64(0x0);
++  RegionFromSection();
++  raw_context.csr_era = 0x00400020;
++  raw_context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP] = 0x80000000;
++
++  StackFrameSymbolizer frame_symbolizer(NULL, NULL);
++  StackwalkerLOONGARCH64 walker(&system_info, &raw_context, &stack_region, &modules,
++                        &frame_symbolizer);
++  // This should succeed, even without a resolver or supplier.
++  vector<const CodeModule*> modules_without_symbols;
++  vector<const CodeModule*> modules_with_corrupt_symbols;
++  ASSERT_TRUE(walker.Walk(&call_stack, &modules_without_symbols,
++                          &modules_with_corrupt_symbols));
++  ASSERT_EQ(1U, modules_without_symbols.size());
++  ASSERT_EQ("module1", modules_without_symbols[0]->debug_file());
++  ASSERT_EQ(0U, modules_with_corrupt_symbols.size());
++  frames = call_stack.frames();
++  ASSERT_EQ(1U, frames->size());
++  StackFrameLOONGARCH64* frame = static_cast<StackFrameLOONGARCH64*>(frames->at(0));
++  // Check that the values from the original raw context made it
++  // through to the context in the stack frame.
++  EXPECT_EQ(0, memcmp(&raw_context, &frame->context, sizeof(raw_context)));
++}
++
++class GetContextFrame: public StackwalkerLOONGARCH64Fixture, public Test { };
++
++TEST_F(GetContextFrame, Simple) {
++  raw_context.context_flags =
++      raw_context.context_flags | MD_CONTEXT_LOONGARCH64_FULL;
++  stack_section.start() = 0x80000000;
++  stack_section.D64(0).D64(0x0);
++  RegionFromSection();
++  raw_context.csr_era = 0x00400020;
++  raw_context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP] = 0x80000000;
++
++  StackFrameSymbolizer frame_symbolizer(&supplier, &resolver);
++  StackwalkerLOONGARCH64 walker(&system_info, &raw_context, &stack_region, &modules,
++                         &frame_symbolizer);
++  vector<const CodeModule*> modules_without_symbols;
++  vector<const CodeModule*> modules_with_corrupt_symbols;
++  ASSERT_TRUE(walker.Walk(&call_stack, &modules_without_symbols,
++                          &modules_with_corrupt_symbols));
++  ASSERT_EQ(1U, modules_without_symbols.size());
++  ASSERT_EQ("module1", modules_without_symbols[0]->debug_file());
++  ASSERT_EQ(0U, modules_with_corrupt_symbols.size());
++  frames = call_stack.frames();
++  StackFrameLOONGARCH64* frame = static_cast<StackFrameLOONGARCH64*>(frames->at(0));
++  // Check that the values from the original raw context made it
++  // through to the context in the stack frame.
++  EXPECT_EQ(0, memcmp(&raw_context, &frame->context, sizeof(raw_context)));
++}
++
++// The stackwalker should be able to produce the context frame even
++// without stack memory present.
++TEST_F(GetContextFrame, NoStackMemory) {
++  raw_context.context_flags =
++      raw_context.context_flags | MD_CONTEXT_LOONGARCH64_FULL;
++  raw_context.csr_era = 0x00400020;
++  raw_context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP] = 0x80000000;
++
++  StackFrameSymbolizer frame_symbolizer(&supplier, &resolver);
++  StackwalkerLOONGARCH64 walker(&system_info, &raw_context, NULL, &modules,
++                         &frame_symbolizer);
++  vector<const CodeModule*> modules_without_symbols;
++  vector<const CodeModule*> modules_with_corrupt_symbols;
++  ASSERT_TRUE(walker.Walk(&call_stack, &modules_without_symbols,
++                          &modules_with_corrupt_symbols));
++  ASSERT_EQ(1U, modules_without_symbols.size());
++  ASSERT_EQ("module1", modules_without_symbols[0]->debug_file());
++  ASSERT_EQ(0U, modules_with_corrupt_symbols.size());
++  frames = call_stack.frames();
++  StackFrameLOONGARCH64* frame = static_cast<StackFrameLOONGARCH64*>(frames->at(0));
++  // Check that the values from the original raw context made it
++  // through to the context in the stack frame.
++  EXPECT_EQ(0, memcmp(&raw_context, &frame->context, sizeof(raw_context)));
++}
++
++class GetCallerFrame: public StackwalkerLOONGARCH64Fixture, public Test { };
++
++TEST_F(GetCallerFrame, ScanWithoutSymbols) {
++  raw_context.context_flags =
++      raw_context.context_flags | MD_CONTEXT_LOONGARCH64_FULL;
++  // When the stack walker resorts to scanning the stack,
++  // only addresses located within loaded modules are
++  // considered valid return addresses.
++  // Force scanning through three frames to ensure that the
++  // stack pointer is set properly in scan-recovered frames.
++  stack_section.start() = 0x80000000;
++  uint64_t return_address1 = 0x00400100;
++  uint64_t return_address2 = 0x00400900;
++  Label frame1_sp, frame2_sp;
++  stack_section
++    // frame 0
++    .Append(32, 0)                      // space
++
++    .D64(0x00490000)                    // junk that's not
++    .D64(0x00600000)                    // a return address
++
++    .D64(frame1_sp)                     // stack pointer
++    .D64(return_address1)               // actual return address
++    // frame 1
++    .Mark(&frame1_sp)
++    .Append(32, 0)                      // space
++
++    .D64(0xF0000000)                    // more junk
++    .D64(0x0000000D)
++
++    .D64(frame2_sp)                     // stack pointer
++    .D64(return_address2)               // actual return address
++    // frame 2
++    .Mark(&frame2_sp)
++    .Append(64, 0);                     // end of stack
++  RegionFromSection();
++
++  raw_context.csr_era = 0x00405510;
++  raw_context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP] = stack_section.start().Value();
++  raw_context.iregs[MD_CONTEXT_LOONGARCH64_REG_RA] = return_address1;
++
++  StackFrameSymbolizer frame_symbolizer(&supplier, &resolver);
++  StackwalkerLOONGARCH64 walker(&system_info, &raw_context, &stack_region, &modules,
++                         &frame_symbolizer);
++  vector<const CodeModule*> modules_without_symbols;
++  vector<const CodeModule*> modules_with_corrupt_symbols;
++  ASSERT_TRUE(walker.Walk(&call_stack, &modules_without_symbols,
++                          &modules_with_corrupt_symbols));
++  ASSERT_EQ(1U, modules_without_symbols.size());
++  ASSERT_EQ("module1", modules_without_symbols[0]->debug_file());
++  ASSERT_EQ(0U, modules_with_corrupt_symbols.size());
++  frames = call_stack.frames();
++  ASSERT_EQ(3U, frames->size());
++
++  StackFrameLOONGARCH64* frame0 = static_cast<StackFrameLOONGARCH64*>(frames->at(0));
++  EXPECT_EQ(StackFrame::FRAME_TRUST_CONTEXT, frame0->trust);
++  ASSERT_EQ(StackFrameLOONGARCH64::CONTEXT_VALID_ALL, frame0->context_validity);
++  EXPECT_EQ(0, memcmp(&raw_context, &frame0->context, sizeof(raw_context)));
++
++  StackFrameLOONGARCH64* frame1 = static_cast<StackFrameLOONGARCH64*>(frames->at(1));
++  EXPECT_EQ(StackFrame::FRAME_TRUST_SCAN, frame1->trust);
++  ASSERT_EQ((StackFrameLOONGARCH64::CONTEXT_VALID_PC |
++             StackFrameLOONGARCH64::CONTEXT_VALID_SP |
++             StackFrameLOONGARCH64::CONTEXT_VALID_FP |
++             StackFrameLOONGARCH64::CONTEXT_VALID_RA),
++            frame1->context_validity);
++  EXPECT_EQ(return_address1 - sizeof(return_address1), frame1->context.csr_era);
++  EXPECT_EQ(frame1_sp.Value(), frame1->context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP]);
++
++  StackFrameLOONGARCH64* frame2 = static_cast<StackFrameLOONGARCH64*>(frames->at(2));
++  EXPECT_EQ(StackFrame::FRAME_TRUST_SCAN, frame2->trust);
++  ASSERT_EQ((StackFrameLOONGARCH64::CONTEXT_VALID_PC |
++             StackFrameLOONGARCH64::CONTEXT_VALID_SP |
++             StackFrameLOONGARCH64::CONTEXT_VALID_FP |
++             StackFrameLOONGARCH64::CONTEXT_VALID_RA),
++            frame2->context_validity);
++  EXPECT_EQ(return_address2 - sizeof(return_address2), frame2->context.csr_era);
++  EXPECT_EQ(frame2_sp.Value(), frame2->context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP]);
++}
++
++TEST_F(GetCallerFrame, ScanWithFunctionSymbols) {
++  raw_context.context_flags =
++      raw_context.context_flags | MD_CONTEXT_LOONGARCH64_FULL;
++  // During stack scanning, if a potential return address
++  // is located within a loaded module that has symbols,
++  // it is only considered a valid return address if it
++  // lies within a function's bounds.
++  stack_section.start() = 0x80000000;
++  uint64_t return_address = 0x00500200;
++  Label frame1_sp;
++  stack_section
++    // frame 0
++    .Append(16, 0)                      // space
++
++    .D64(0x00490000)                    // junk that's not
++    .D64(0x00600000)                    // a return address
++
++    .D64(0x00401000)                    // a couple of plausible addresses
++    .D64(0x0050F000)                    // that are not within functions
++
++    .D64(frame1_sp)                     // stack pointer
++    .D64(return_address)                // actual return address
++    // frame 1
++    .Mark(&frame1_sp)
++    .Append(64, 0);                     // end of stack
++  RegionFromSection();
++
++  raw_context.csr_era = 0x00400200;
++  raw_context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP] = stack_section.start().Value();
++  raw_context.iregs[MD_CONTEXT_LOONGARCH64_REG_RA] = return_address;
++
++  SetModuleSymbols(&module1,
++                   // The youngest frame's function.
++                   "FUNC 100 400 10 monotreme\n");
++  SetModuleSymbols(&module2,
++                   // The calling frame's function.
++                   "FUNC 100 400 10 marsupial\n");
++
++  StackFrameSymbolizer frame_symbolizer(&supplier, &resolver);
++  StackwalkerLOONGARCH64 walker(&system_info, &raw_context, &stack_region, &modules,
++                         &frame_symbolizer);
++  vector<const CodeModule*> modules_without_symbols;
++  vector<const CodeModule*> modules_with_corrupt_symbols;
++  ASSERT_TRUE(walker.Walk(&call_stack, &modules_without_symbols,
++                          &modules_with_corrupt_symbols));
++  ASSERT_EQ(0U, modules_without_symbols.size());
++  ASSERT_EQ(0U, modules_with_corrupt_symbols.size());
++  frames = call_stack.frames();
++  ASSERT_EQ(2U, frames->size());
++
++  StackFrameLOONGARCH64* frame0 = static_cast<StackFrameLOONGARCH64*>(frames->at(0));
++  EXPECT_EQ(StackFrame::FRAME_TRUST_CONTEXT, frame0->trust);
++  ASSERT_EQ(StackFrameLOONGARCH64::CONTEXT_VALID_ALL, frame0->context_validity);
++  EXPECT_EQ(0, memcmp(&raw_context, &frame0->context, sizeof(raw_context)));
++  EXPECT_EQ("monotreme", frame0->function_name);
++  EXPECT_EQ(0x00400100U, frame0->function_base);
++
++  StackFrameLOONGARCH64* frame1 = static_cast<StackFrameLOONGARCH64*>(frames->at(1));
++  EXPECT_EQ(StackFrame::FRAME_TRUST_SCAN, frame1->trust);
++  ASSERT_EQ((StackFrameLOONGARCH64::CONTEXT_VALID_PC |
++             StackFrameLOONGARCH64::CONTEXT_VALID_SP |
++             StackFrameLOONGARCH64::CONTEXT_VALID_FP |
++             StackFrameLOONGARCH64::CONTEXT_VALID_RA),
++            frame1->context_validity);
++  EXPECT_EQ(return_address - sizeof(return_address), frame1->context.csr_era);
++  EXPECT_EQ(frame1_sp.Value(), frame1->context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP]);
++  EXPECT_EQ("marsupial", frame1->function_name);
++  EXPECT_EQ(0x00500100U, frame1->function_base);
++}
++
++TEST_F(GetCallerFrame, CheckStackFrameSizeLimit) {
++  raw_context.context_flags =
++      raw_context.context_flags | MD_CONTEXT_LOONGARCH64_FULL;
++  // If the stackwalker resorts to stack scanning, it will scan only
++  // 1024 bytes of stack which correspondes to maximum size of stack frame.
++  stack_section.start() = 0x80000000;
++  uint64_t return_address1 = 0x00500100;
++  uint64_t return_address2 = 0x00500900;
++  Label frame1_sp, frame2_sp;
++  stack_section
++    // frame 0
++    .Append(32, 0)                      // space
++
++    .D64(0x00490000)                    // junk that's not
++    .D64(0x00600000)                    // a return address
++
++    .Append(96, 0)                      // more space
++
++    .D64(frame1_sp)                     // stack pointer
++    .D64(return_address1)               // actual return address
++    // frame 1
++    .Mark(&frame1_sp)
++    .Append(128 * 4, 0)                 // space
++
++    .D64(0x00F00000)                    // more junk
++    .D64(0x0000000D)
++
++    .Append(128 * 4, 0)                 // more space
++
++    .D64(frame2_sp)                     // stack pointer
++    .D64(return_address2)               // actual return address
++                                        // (won't be found)
++    // frame 2
++    .Mark(&frame2_sp)
++    .Append(64, 0);                     // end of stack
++  RegionFromSection();
++
++  raw_context.csr_era = 0x00405510;
++  raw_context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP] = stack_section.start().Value();
++  raw_context.iregs[MD_CONTEXT_LOONGARCH64_REG_RA] = return_address1;
++
++  StackFrameSymbolizer frame_symbolizer(&supplier, &resolver);
++  StackwalkerLOONGARCH64 walker(&system_info, &raw_context, &stack_region, &modules,
++                         &frame_symbolizer);
++  vector<const CodeModule*> modules_without_symbols;
++  vector<const CodeModule*> modules_with_corrupt_symbols;
++  ASSERT_TRUE(walker.Walk(&call_stack, &modules_without_symbols,
++                          &modules_with_corrupt_symbols));
++  ASSERT_EQ(2U, modules_without_symbols.size());
++  ASSERT_EQ("module1", modules_without_symbols[0]->debug_file());
++  ASSERT_EQ("module2", modules_without_symbols[1]->debug_file());
++  ASSERT_EQ(0U, modules_with_corrupt_symbols.size());
++  frames = call_stack.frames();
++  ASSERT_EQ(2U, frames->size());
++
++  StackFrameLOONGARCH64* frame0 = static_cast<StackFrameLOONGARCH64*>(frames->at(0));
++  EXPECT_EQ(StackFrame::FRAME_TRUST_CONTEXT, frame0->trust);
++  ASSERT_EQ(StackFrameLOONGARCH64::CONTEXT_VALID_ALL, frame0->context_validity);
++  EXPECT_EQ(0, memcmp(&raw_context, &frame0->context, sizeof(raw_context)));
++
++  StackFrameLOONGARCH64* frame1 = static_cast<StackFrameLOONGARCH64*>(frames->at(1));
++  EXPECT_EQ(StackFrame::FRAME_TRUST_SCAN, frame1->trust);
++  ASSERT_EQ((StackFrameLOONGARCH64::CONTEXT_VALID_PC |
++             StackFrameLOONGARCH64::CONTEXT_VALID_SP |
++             StackFrameLOONGARCH64::CONTEXT_VALID_FP |
++             StackFrameLOONGARCH64::CONTEXT_VALID_RA),
++            frame1->context_validity);
++  EXPECT_EQ(return_address1 - sizeof(return_address1), frame1->context.csr_era);
++  EXPECT_EQ(frame1_sp.Value(), frame1->context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP]);
++}
++
++// Test that set_max_frames_scanned prevents using stack scanning
++// to find caller frames.
++TEST_F(GetCallerFrame, ScanningNotAllowed) {
++  raw_context.context_flags =
++      raw_context.context_flags | MD_CONTEXT_LOONGARCH64_FULL;
++  // When the stack walker resorts to scanning the stack,
++  // only fixed number of frames are allowed to be scanned out from stack
++  stack_section.start() = 0x80000000;
++  uint64_t return_address1 = 0x00500100;
++  uint64_t return_address2 = 0x00500900;
++  Label frame1_sp, frame2_sp;
++  stack_section
++    // frame 0
++    .Append(32, 0)                      // space
++
++    .D64(0x00490000)                    // junk that's not
++    .D64(0x00600000)                    // a return address
++
++    .Append(96, 0)                      // more space
++
++    .D64(frame1_sp)                     // stack pointer
++    .D64(return_address1)               // actual return address
++    // frame 1
++    .Mark(&frame1_sp)
++    .Append(128 * 4, 0)                 // space
++
++    .D64(0x00F00000)                    // more junk
++    .D64(0x0000000D)
++
++    .Append(128 * 4, 0)                 // more space
++
++    .D64(frame2_sp)                     // stack pointer
++    .D64(return_address2)               // actual return address
++                                        // (won't be found)
++    // frame 2
++    .Mark(&frame2_sp)
++    .Append(64, 0);                     // end of stack
++  RegionFromSection();
++
++  raw_context.csr_era = 0x00405510;
++  raw_context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP] = stack_section.start().Value();
++  raw_context.iregs[MD_CONTEXT_LOONGARCH64_REG_RA] = return_address1;
++
++  StackFrameSymbolizer frame_symbolizer(&supplier, &resolver);
++  StackwalkerLOONGARCH64 walker(&system_info, &raw_context, &stack_region, &modules,
++                         &frame_symbolizer);
++  Stackwalker::set_max_frames_scanned(0);
++
++  vector<const CodeModule*> modules_without_symbols;
++  vector<const CodeModule*> modules_with_corrupt_symbols;
++  ASSERT_TRUE(walker.Walk(&call_stack, &modules_without_symbols,
++                          &modules_with_corrupt_symbols));
++  ASSERT_EQ(1U, modules_without_symbols.size());
++  ASSERT_EQ("module1", modules_without_symbols[0]->debug_file());
++  ASSERT_EQ(0U, modules_with_corrupt_symbols.size());
++  frames = call_stack.frames();
++  ASSERT_EQ(1U, frames->size());
++
++  StackFrameLOONGARCH64* frame0 = static_cast<StackFrameLOONGARCH64*>(frames->at(0));
++  EXPECT_EQ(StackFrame::FRAME_TRUST_CONTEXT, frame0->trust);
++  ASSERT_EQ(StackFrameLOONGARCH64::CONTEXT_VALID_ALL, frame0->context_validity);
++  EXPECT_EQ(0, memcmp(&raw_context, &frame0->context, sizeof(raw_context)));
++}
++
++struct CFIFixture: public StackwalkerLOONGARCH64Fixture {
++  CFIFixture() {
++    // Provide some STACK CFI records;
++    SetModuleSymbols(&module1,
++                     // The youngest frame's function.
++                     "FUNC 4000 1000 0 enchiridion\n"
++                     // Initially, nothing has been pushed on the stack,
++                     // and the return address is still in the $ra register.
++                     "STACK CFI INIT 4000 1000 .cfa: $sp 0 + .ra: $ra\n"
++                     // Move stack pointer.
++                     "STACK CFI 4004 .cfa: $sp 32 +\n"
++                     // store $fp and ra
++                     "STACK CFI 4008 $fp: .cfa -8 + ^ .ra: .cfa -4 + ^\n"
++                     // restore $fp
++                     "STACK CFI 400c .cfa: $fp 32 +\n"
++                     // restore $sp
++                     "STACK CFI 4018 .cfa: $sp 32 +\n"
++
++                     "STACK CFI 4020 $fp: $fp .cfa: $sp 0 + .ra: .ra\n"
++
++                     // The calling function.
++                     "FUNC 5000 1000 0 epictetus\n"
++                     // Mark it as end of stack.
++                     "STACK CFI INIT 5000 8 .cfa: $sp 0 + .ra: $ra\n"
++
++                     // A function whose CFI makes the stack pointer
++                     // go backwards.
++                     "FUNC 6000 1000 20 palinal\n"
++                     "STACK CFI INIT 6000 1000 .cfa: $sp 4 - .ra: $ra\n"
++
++                     // A function with CFI expressions that can't be
++                     // evaluated.
++                     "FUNC 7000 1000 20 rhetorical\n"
++                     "STACK CFI INIT 7000 1000 .cfa: moot .ra: ambiguous\n"
++                   );
++
++    // Provide some distinctive values for the caller's registers.
++    expected.csr_era = 0x00405500;
++    expected.iregs[MD_CONTEXT_LOONGARCH64_REG_S0] = 0x0;
++    expected.iregs[MD_CONTEXT_LOONGARCH64_REG_S1] = 0x1;
++    expected.iregs[MD_CONTEXT_LOONGARCH64_REG_S2] = 0x2;
++    expected.iregs[MD_CONTEXT_LOONGARCH64_REG_S3] = 0x3;
++    expected.iregs[MD_CONTEXT_LOONGARCH64_REG_S4] = 0x4;
++    expected.iregs[MD_CONTEXT_LOONGARCH64_REG_S5] = 0x5;
++    expected.iregs[MD_CONTEXT_LOONGARCH64_REG_S6] = 0x6;
++    expected.iregs[MD_CONTEXT_LOONGARCH64_REG_S7] = 0x7;
++    expected.iregs[MD_CONTEXT_LOONGARCH64_REG_SP] = 0x80000000;
++    expected.iregs[MD_CONTEXT_LOONGARCH64_REG_FP] = 0x80000000;
++    expected.iregs[MD_CONTEXT_LOONGARCH64_REG_RA] = 0x00405508;
++
++    // Expect CFI to recover all callee-save registers. Since CFI is the
++    // only stack frame construction technique we have, aside from the
++    // context frame itself, there's no way for us to have a set of valid
++    // registers smaller than this.
++    expected_validity = (StackFrameLOONGARCH64::CONTEXT_VALID_PC |
++                         StackFrameLOONGARCH64::CONTEXT_VALID_S0 |
++                         StackFrameLOONGARCH64::CONTEXT_VALID_S1 |
++                         StackFrameLOONGARCH64::CONTEXT_VALID_S2 |
++                         StackFrameLOONGARCH64::CONTEXT_VALID_S3 |
++                         StackFrameLOONGARCH64::CONTEXT_VALID_S4 |
++                         StackFrameLOONGARCH64::CONTEXT_VALID_S5 |
++                         StackFrameLOONGARCH64::CONTEXT_VALID_S6 |
++                         StackFrameLOONGARCH64::CONTEXT_VALID_S7 |
++                         StackFrameLOONGARCH64::CONTEXT_VALID_S8 |
++                         StackFrameLOONGARCH64::CONTEXT_VALID_SP |
++                         StackFrameLOONGARCH64::CONTEXT_VALID_FP |
++                         StackFrameLOONGARCH64::CONTEXT_VALID_RA);
++
++    // By default, context frames provide all registers, as normal.
++    context_frame_validity = StackFrameLOONGARCH64::CONTEXT_VALID_ALL;
++
++    // By default, registers are unchanged.
++    raw_context = expected;
++  }
++
++  // Walk the stack, using stack_section as the contents of the stack
++  // and raw_context as the current register values. (Set the stack
++  // pointer to the stack's starting address.) Expect two stack
++  // frames; in the older frame, expect the callee-saves registers to
++  // have values matching those in 'expected'.
++  void CheckWalk() {
++    RegionFromSection();
++    raw_context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP] = stack_section.start().Value();
++
++    StackFrameSymbolizer frame_symbolizer(&supplier, &resolver);
++    StackwalkerLOONGARCH64 walker(&system_info, &raw_context, &stack_region,
++                           &modules, &frame_symbolizer);
++    vector<const CodeModule*> modules_without_symbols;
++    vector<const CodeModule*> modules_with_corrupt_symbols;
++    ASSERT_TRUE(walker.Walk(&call_stack, &modules_without_symbols,
++                            &modules_with_corrupt_symbols));
++    ASSERT_EQ(0U, modules_without_symbols.size());
++    ASSERT_EQ(0U, modules_with_corrupt_symbols.size());
++    frames = call_stack.frames();
++    ASSERT_EQ(2U, frames->size());
++
++    StackFrameLOONGARCH64* frame0 = static_cast<StackFrameLOONGARCH64*>(frames->at(0));
++    EXPECT_EQ(StackFrame::FRAME_TRUST_CONTEXT, frame0->trust);
++    ASSERT_EQ(StackFrameLOONGARCH64::CONTEXT_VALID_ALL, frame0->context_validity);
++    EXPECT_EQ("enchiridion", frame0->function_name);
++    EXPECT_EQ(0x00404000U, frame0->function_base);
++
++    StackFrameLOONGARCH64* frame1 = static_cast<StackFrameLOONGARCH64*>(frames->at(1));
++    EXPECT_EQ(StackFrame::FRAME_TRUST_CFI, frame1->trust);
++    ASSERT_EQ(expected_validity, frame1->context_validity);
++    EXPECT_EQ(expected.iregs[MD_CONTEXT_LOONGARCH64_REG_S0],
++              frame1->context.iregs[MD_CONTEXT_LOONGARCH64_REG_S0]);
++    EXPECT_EQ(expected.iregs[MD_CONTEXT_LOONGARCH64_REG_S1],
++              frame1->context.iregs[MD_CONTEXT_LOONGARCH64_REG_S1]);
++    EXPECT_EQ(expected.iregs[MD_CONTEXT_LOONGARCH64_REG_S2],
++              frame1->context.iregs[MD_CONTEXT_LOONGARCH64_REG_S2]);
++    EXPECT_EQ(expected.iregs[MD_CONTEXT_LOONGARCH64_REG_S3],
++              frame1->context.iregs[MD_CONTEXT_LOONGARCH64_REG_S3]);
++    EXPECT_EQ(expected.iregs[MD_CONTEXT_LOONGARCH64_REG_S4],
++              frame1->context.iregs[MD_CONTEXT_LOONGARCH64_REG_S4]);
++    EXPECT_EQ(expected.iregs[MD_CONTEXT_LOONGARCH64_REG_S5],
++              frame1->context.iregs[MD_CONTEXT_LOONGARCH64_REG_S5]);
++    EXPECT_EQ(expected.iregs[MD_CONTEXT_LOONGARCH64_REG_S6],
++              frame1->context.iregs[MD_CONTEXT_LOONGARCH64_REG_S6]);
++    EXPECT_EQ(expected.iregs[MD_CONTEXT_LOONGARCH64_REG_S7],
++              frame1->context.iregs[MD_CONTEXT_LOONGARCH64_REG_S7]);
++    EXPECT_EQ(expected.iregs[MD_CONTEXT_LOONGARCH64_REG_FP],
++              frame1->context.iregs[MD_CONTEXT_LOONGARCH64_REG_FP]);
++    EXPECT_EQ(expected.iregs[MD_CONTEXT_LOONGARCH64_REG_RA],
++              frame1->context.iregs[MD_CONTEXT_LOONGARCH64_REG_RA]);
++    EXPECT_EQ(expected.iregs[MD_CONTEXT_LOONGARCH64_REG_SP],
++              frame1->context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP]);
++    EXPECT_EQ(expected.csr_era, frame1->context.csr_era);
++    EXPECT_EQ(expected.csr_era, frame1->instruction);
++    EXPECT_EQ("epictetus", frame1->function_name);
++    EXPECT_EQ(0x00405000U, frame1->function_base);
++  }
++
++  // The values we expect to find for the caller's registers.
++  MDRawContextLOONGARCH64 expected;
++
++  // The validity mask for expected.
++  long expected_validity;
++
++  // The validity mask to impose on the context frame.
++  int context_frame_validity;
++};
++
++class CFI: public CFIFixture, public Test { };
++
++// TODO(gordanac): add CFI tests
++
++TEST_F(CFI, At4004) {
++  raw_context.context_flags =
++      raw_context.context_flags | MD_CONTEXT_LOONGARCH64_FULL;
++  Label frame1_sp = expected.iregs[MD_CONTEXT_LOONGARCH64_REG_SP];
++  stack_section
++    // frame0
++    .Append(16, 0)               // space
++    .D64(frame1_sp)              // stack pointer
++    .D64(0x00405510)             // return address
++    .Mark(&frame1_sp);           // This effectively sets stack_section.start().
++  raw_context.csr_era = 0x00404004;
++  CheckWalk();
++}
++
++// Check that we reject rules that would cause the stack pointer to
++// move in the wrong direction.
++TEST_F(CFI, RejectBackwards) {
++  raw_context.context_flags =
++      raw_context.context_flags | MD_CONTEXT_LOONGARCH64_FULL;
++  raw_context.csr_era = 0x40005000;
++  raw_context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP] = 0x80000000;
++  raw_context.iregs[MD_CONTEXT_LOONGARCH64_REG_RA] = 0x00405510;
++
++  StackFrameSymbolizer frame_symbolizer(&supplier, &resolver);
++  StackwalkerLOONGARCH64 walker(&system_info, &raw_context, &stack_region, &modules,
++                         &frame_symbolizer);
++  vector<const CodeModule*> modules_without_symbols;
++  vector<const CodeModule*> modules_with_corrupt_symbols;
++  ASSERT_TRUE(walker.Walk(&call_stack, &modules_without_symbols,
++                          &modules_with_corrupt_symbols));
++  ASSERT_EQ(0U, modules_without_symbols.size());
++  ASSERT_EQ(0U, modules_with_corrupt_symbols.size());
++  frames = call_stack.frames();
++  ASSERT_EQ(1U, frames->size());
++}
++
++// Check that we reject rules whose expressions' evaluation fails.
++TEST_F(CFI, RejectBadExpressions) {
++  raw_context.context_flags =
++      raw_context.context_flags | MD_CONTEXT_LOONGARCH64_FULL;
++  raw_context.csr_era = 0x00407000;
++  raw_context.iregs[MD_CONTEXT_LOONGARCH64_REG_SP] = 0x80000000;
++  raw_context.iregs[MD_CONTEXT_LOONGARCH64_REG_RA] = 0x00405510;
++
++  StackFrameSymbolizer frame_symbolizer(&supplier, &resolver);
++  StackwalkerLOONGARCH64 walker(&system_info, &raw_context, &stack_region, &modules,
++                         &frame_symbolizer);
++  vector<const CodeModule*> modules_without_symbols;
++  vector<const CodeModule*> modules_with_corrupt_symbols;
++  ASSERT_TRUE(walker.Walk(&call_stack, &modules_without_symbols,
++                          &modules_with_corrupt_symbols));
++  ASSERT_EQ(0U, modules_without_symbols.size());
++  ASSERT_EQ(0U, modules_with_corrupt_symbols.size());
++  frames = call_stack.frames();
++  ASSERT_EQ(1U, frames->size());
++}
+diff --git a/src/processor/synth_minidump.h b/src/processor/synth_minidump.h
+index 2da4d5fe99567d4481473c22d3f8095831b86d9d..ac69f0fb045a48d687cc9028d2f3c168a55a8083 100644
+--- a/src/processor/synth_minidump.h
++++ b/src/processor/synth_minidump.h
+@@ -229,6 +229,7 @@ class Context: public Section {
+   Context(const Dump& dump, const MDRawContextX86& context);
+   Context(const Dump& dump, const MDRawContextARM& context);
+   Context(const Dump& dump, const MDRawContextMIPS& context);
++  Context(const Dump& dump, const MDRawContextLOONGARCH64& context);
+   // Add an empty context to the dump.
+   Context(const Dump& dump) : Section(dump) {}
+   // Add constructors for other architectures here. Remember to byteswap.
+diff --git a/src/tools/linux/md2core/minidump-2-core.cc b/src/tools/linux/md2core/minidump-2-core.cc
+index 7e351d16f852cfb898c8961a585626fd69bb1c04..7af9279cda48660b80b40c47581dcf585a3f5b58 100644
+--- a/src/tools/linux/md2core/minidump-2-core.cc
++++ b/src/tools/linux/md2core/minidump-2-core.cc
+@@ -77,6 +77,8 @@
+   #define ELF_ARCH  EM_MIPS
+ #elif defined(__aarch64__)
+   #define ELF_ARCH  EM_AARCH64
++#elif defined(__loongarch_lp64)
++  #define ELF_ARCH  EM_LOONGARCH
+ #endif
+ 
+ #if defined(__arm__)
+@@ -259,7 +261,7 @@ typedef struct prpsinfo {       /* Information about process                 */
+   unsigned char  pr_zomb;       /* Zombie                                    */
+   signed char    pr_nice;       /* Nice val                                  */
+   unsigned long  pr_flag;       /* Flags                                     */
+-#if defined(__x86_64__) || defined(__mips__)
++#if defined(__x86_64__) || defined(__mips__) || defined(__loongarch_lp64)
+   uint32_t       pr_uid;        /* User ID                                   */
+   uint32_t       pr_gid;        /* Group ID                                  */
+ #else
+@@ -306,7 +308,7 @@ struct CrashedProcess {
+ 
+   struct Thread {
+     pid_t tid;
+-#if defined(__mips__)
++#if defined(__mips__) || defined(__loongarch_lp64)
+     mcontext_t mcontext;
+ #else
+     user_regs_struct regs;
+@@ -533,6 +535,17 @@ ParseThreadRegisters(CrashedProcess::Thread* thread,
+   thread->mcontext.fpc_eir = rawregs->float_save.fir;
+ #endif
+ }
++#elif defined(__loongarch_lp64)
++static void
++ParseThreadRegisters(CrashedProcess::Thread* thread,
++                     const MinidumpMemoryRange& range) {
++  const MDRawContextLOONGARCH64* rawregs = range.GetData<MDRawContextLOONGARCH64>(0);
++
++  for (int i = 0; i < MD_CONTEXT_LOONGARCH64_GPR_COUNT; ++i)
++    thread->mcontext.__gregs[i] = rawregs->iregs[i];
++
++  thread->mcontext.__pc = rawregs->csr_era;
++}
+ #else
+ #error "This code has not been ported to your platform yet"
+ #endif
+@@ -622,6 +635,12 @@ ParseSystemInfo(const Options& options, CrashedProcess* crashinfo,
+ # else
+ #  error "This mips ABI is currently not supported (n32)"
+ # endif
++#elif defined(__loongarch_lp64)
++  if (sysinfo->processor_architecture != MD_CPU_ARCHITECTURE_LOONGARCH64) {
++    fprintf(stderr,
++            "This version of minidump-2-core only supports Loongarch64.\n");
++    exit(1);
++  }
+ #else
+ #error "This code has not been ported to your platform yet"
+ #endif
+@@ -926,6 +945,8 @@ WriteThread(const Options& options, const CrashedProcess::Thread& thread,
+   pr.pr_pid = thread.tid;
+ #if defined(__mips__)
+   memcpy(&pr.pr_reg, &thread.mcontext.gregs, sizeof(user_regs_struct));
++#elif defined(__loongarch_lp64)
++  memcpy(&pr.pr_reg, thread.mcontext.__gregs, sizeof(user_regs_struct));
+ #else
+   memcpy(&pr.pr_reg, &thread.regs, sizeof(user_regs_struct));
+ #endif
