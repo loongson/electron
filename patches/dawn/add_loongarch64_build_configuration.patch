@@ -1,0 +1,70 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Tue, 3 Jan 2023 08:21:42 +0000
+Subject: add loongarch64 build configuration
+
+
+diff --git a/src/dawn/common/Assert.cpp b/src/dawn/common/Assert.cpp
+index ecc92dfc8376fac8eccc3314cde03bd968abd28e..75f819d85519e20a93548b4cbbfae6c50efc502c 100644
+--- a/src/dawn/common/Assert.cpp
++++ b/src/dawn/common/Assert.cpp
+@@ -31,10 +31,12 @@ void BreakPoint() {
+     __asm__ __volatile__("ebreak");
+ #elif DAWN_PLATFORM_IS(MIPS)
+     __asm__ __volatile__("break");
+-#elif DAWN_PLATFORM_IS(S390) || DAWN_PLATFORM_IS_(S390X)
++#elif DAWN_PLATFORM_IS(S390) || DAWN_PLATFORM_IS(S390X)
+     __asm__ __volatile__(".word 0x0001");
+-#elif DAWN_PLATFORM_IS(PPC) || DAWN_PLATFORM_IS_(PPC64)
++#elif DAWN_PLATFORM_IS(PPC) || DAWN_PLATFORM_IS(PPC64)
+     __asm__ __volatile__("twge 2,2");
++#elif DAWN_PLATFORM_IS(LOONG64)
++    __asm__ __volatile__("break 0");
+ #else
+ #error "Unsupported platform"
+ #endif
+diff --git a/src/dawn/common/Platform.h b/src/dawn/common/Platform.h
+index 39d5eb4102032c169fae96a0d97a94e01b18dfe8..20f59f6addfb73b045767a5883c936667a89efb9 100644
+--- a/src/dawn/common/Platform.h
++++ b/src/dawn/common/Platform.h
+@@ -124,9 +124,9 @@
+ #define DAWN_PLATFORM_IS_MIPS64 1
+ #endif
+ 
+-#elif defiend(__s390__)
++#elif defined(__s390__)
+ #define DAWN_PLATFORM_IS_S390 1
+-#elif defiend(__s390x__)
++#elif defined(__s390x__)
+ #define DAWN_PLATFORM_IS_S390X 1
+ 
+ #elif defined(__PPC__)
+@@ -134,6 +134,11 @@
+ #elif defined(__PPC64__)
+ #define DAWN_PLATFORM_IS_PPC64 1
+ 
++#elif defined(__loongarch_lp32)
++#define DAWN_PLATFORM_IS_LOONG32 1
++#elif defined(__loongarch_lp64)
++#define DAWN_PLATFORM_IS_LOONG64 1
++
+ #else
+ #error "Unsupported platform."
+ #endif
+@@ -144,13 +149,14 @@
+ //  - 32_BIT
+ #if defined(DAWN_PLATFORM_IS_X86_64) || defined(DAWN_PLATFORM_IS_ARM64) ||   \
+     defined(DAWN_PLATFORM_IS_RISCV64) || defined(DAWN_PLATFORM_IS_MIPS64) || \
+-    defined(DAWN_PLATFORM_IS_S390X) || defined(DAWN_PLATFORM_IS_PPC64)
++    defined(DAWN_PLATFORM_IS_S390X) || defined(DAWN_PLATFORM_IS_PPC64) || \
++    defined(DAWN_PLATFORM_IS_LOONG64)
+ #define DAWN_PLATFORM_IS_64_BIT 1
+ static_assert(sizeof(sizeof(char)) == 8, "Expect sizeof(size_t) == 8");
+ #elif defined(DAWN_PLATFORM_IS_I386) || defined(DAWN_PLATFORM_IS_ARM32) ||   \
+     defined(DAWN_PLATFORM_IS_RISCV32) || defined(DAWN_PLATFORM_IS_MIPS32) || \
+     defined(DAWN_PLATFORM_IS_S390) || defined(DAWN_PLATFORM_IS_PPC32) ||     \
+-    defined(DAWN_PLATFORM_IS_EMSCRIPTEN)
++    defined(DAWN_PLATFORM_IS_EMSCRIPTEN) || defined(DAWN_PLATFORM_IS_LOONG32)
+ #define DAWN_PLATFORM_IS_32_BIT 1
+ static_assert(sizeof(sizeof(char)) == 4, "Expect sizeof(size_t) == 4");
+ #else
