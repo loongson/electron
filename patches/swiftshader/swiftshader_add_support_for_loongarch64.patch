@@ -1,0 +1,299 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Mon, 6 Jun 2022 07:56:50 +0000
+Subject: swiftshader add support for loongarch64
+
+using llvm 11
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index fc252f8a2584e8e4f4feaf6fa1c2eea73e637c99..b08dbd39193543f82d70a4ac17e886504f315b9b 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -60,6 +60,12 @@ elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^ppc.*")
+     else()
+         message(FATAL_ERROR "Architecture is not supported")
+     endif()
++elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "loongarch*")
++    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
++        set(ARCH "loongarch64")
++    else()
++        set(ARCH "loongarch")
++    endif()
+ else()
+     if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+         set(ARCH "x86_64")
+@@ -193,9 +199,15 @@ set(DEFAULT_REACTOR_BACKEND "LLVM")
+ set(REACTOR_BACKEND ${DEFAULT_REACTOR_BACKEND} CACHE STRING "JIT compiler back-end used by Reactor")
+ set_property(CACHE REACTOR_BACKEND PROPERTY STRINGS LLVM LLVM-Submodule Subzero)
+ 
+-set(DEFAULT_SWIFTSHADER_LLVM_VERSION "10.0")
+-set(SWIFTSHADER_LLVM_VERSION ${DEFAULT_SWIFTSHADER_LLVM_VERSION} CACHE STRING "LLVM version to use")
+-set_property(CACHE SWIFTSHADER_LLVM_VERSION PROPERTY STRINGS "10.0")
++if(ARCH STREQUAL "loongarch64")
++    set(DEFAULT_SWIFTSHADER_LLVM_VERSION "11.0")
++    set(SWIFTSHADER_LLVM_VERSION ${DEFAULT_SWIFTSHADER_LLVM_VERSION} CACHE STRING "LLVM version to use")
++    set_property(CACHE SWIFTSHADER_LLVM_VERSION PROPERTY STRINGS "11.0")
++else()
++    set(DEFAULT_SWIFTSHADER_LLVM_VERSION "10.0")
++    set(SWIFTSHADER_LLVM_VERSION ${DEFAULT_SWIFTSHADER_LLVM_VERSION} CACHE STRING "LLVM version to use")
++    set_property(CACHE SWIFTSHADER_LLVM_VERSION PROPERTY STRINGS "10.0")
++endif()
+ 
+ # If defined, overrides the default optimization level of the current reactor backend.
+ # Set to one of the rr::Optimization::Level enum values.
+@@ -516,7 +528,7 @@ else()
+     endif()
+     if(ARCH STREQUAL "mips64el")
+         set_cpp_flag("-EL")
+-        set_cpp_flag("-march=mips64r2")
++        set_cpp_flag("-march=loongson3a")
+         set_cpp_flag("-mabi=64")
+         set_cpp_flag("-fPIC")
+         set_cpp_flag("-mxgot")
+diff --git a/src/Reactor/BUILD.gn b/src/Reactor/BUILD.gn
+index 67dfeb0ec886da072ad8b0aae84685aebcc68e23..bca06eb5e1d767e7eed28a7b4ea5c555f0e77d5f 100644
+--- a/src/Reactor/BUILD.gn
++++ b/src/Reactor/BUILD.gn
+@@ -307,7 +307,11 @@ if (supports_subzero) {
+ 
+ if (supports_llvm) {
+   swiftshader_source_set("swiftshader_llvm_reactor") {
+-    llvm_dir = "../../third_party/llvm-10.0"
++    if (current_cpu == "loong64") {
++      llvm_dir = "../../third_party/llvm-11.0"
++    } else {
++      llvm_dir = "../../third_party/llvm-10.0"
++    }
+ 
+     deps = [
+       ":swiftshader_reactor_base",
+diff --git a/src/Reactor/ExecutableMemory.cpp b/src/Reactor/ExecutableMemory.cpp
+index d35f3d5f76b96bb8fe6edc2caa45948abb3bc99d..356a7a24e18f154c447d803672b8f68e55207e09 100644
+--- a/src/Reactor/ExecutableMemory.cpp
++++ b/src/Reactor/ExecutableMemory.cpp
+@@ -158,6 +158,8 @@ static int memfd_create(const char *name, unsigned int flags)
+ #			define __NR_memfd_create 356
+ #		elif __x86_64__
+ #			define __NR_memfd_create 319
++#       elif __loongarch64
++#           define __NR_memfd_create 279
+ #		endif /* __NR_memfd_create__ */
+ #		ifdef __NR_memfd_create
+ 	// In the event of no system call this returns -1 with errno set
+diff --git a/src/Reactor/LLVMJIT.cpp b/src/Reactor/LLVMJIT.cpp
+index fad747af06ceecd77793ac3fa58cf45fa0c98fc4..06f6e2c0021a256e1f4073314fd085e8e91917ac 100644
+--- a/src/Reactor/LLVMJIT.cpp
++++ b/src/Reactor/LLVMJIT.cpp
+@@ -414,7 +414,7 @@ static uint32_t sync_fetch_and_op(uint32_t volatile *ptr, uint32_t val, F f)
+ }
+ #endif
+ 
+-#if LLVM_VERSION_MAJOR >= 11 /* TODO(b/165000222): Unconditional after LLVM 11 upgrade */
++#if LLVM_VERSION_MAJOR > 11 /* TODO(b/165000222): Unconditional after LLVM 11 upgrade */
+ class ExternalSymbolGenerator : public llvm::orc::DefinitionGenerator
+ #else
+ class ExternalSymbolGenerator : public llvm::orc::JITDylib::DefinitionGenerator
+@@ -603,7 +603,7 @@ class ExternalSymbolGenerator : public llvm::orc::JITDylib::DefinitionGenerator
+ 	};
+ 
+ 	llvm::Error tryToGenerate(
+-#if LLVM_VERSION_MAJOR >= 11 /* TODO(b/165000222): Unconditional after LLVM 11 upgrade */
++#if LLVM_VERSION_MAJOR > 11 /* TODO(b/165000222): Unconditional after LLVM 11 upgrade */
+ 	    llvm::orc::LookupState &state,
+ #endif
+ 	    llvm::orc::LookupKind kind,
+@@ -844,7 +844,7 @@ public:
+ 
+ 	~JITRoutine()
+ 	{
+-#if LLVM_VERSION_MAJOR >= 11 /* TODO(b/165000222): Unconditional after LLVM 11 upgrade */
++#if LLVM_VERSION_MAJOR > 11 /* TODO(b/165000222): Unconditional after LLVM 11 upgrade */
+ 		if(auto err = session.endSession())
+ 		{
+ 			session.reportError(std::move(err));
+diff --git a/src/Reactor/LLVMReactor.cpp b/src/Reactor/LLVMReactor.cpp
+index 9a2cb0b411bf7fef8df274bcaaddebf5b8f2ac2a..457c7f529a43a55931070e216a2d5c8da78c473f 100644
+--- a/src/Reactor/LLVMReactor.cpp
++++ b/src/Reactor/LLVMReactor.cpp
+@@ -369,7 +369,11 @@ std::string Caps::backendName()
+ 
+ bool Caps::coroutinesSupported()
+ {
++#if defined(__loongarch__)
++	return false;
++#else
+ 	return true;
++#endif
+ }
+ 
+ bool Caps::fmaIsFast()
+@@ -1281,7 +1285,7 @@ Value *Nucleus::createAtomicAdd(Value *ptr, Value *value, std::memory_order memo
+ {
+ 	RR_DEBUG_INFO_UPDATE_LOC();
+ 	return V(jit->builder->CreateAtomicRMW(llvm::AtomicRMWInst::Add, V(ptr), V(value),
+-#if LLVM_VERSION_MAJOR >= 11
++#if LLVM_VERSION_MAJOR > 11
+ 	                                       llvm::MaybeAlign(),
+ #endif
+ 	                                       atomicOrdering(true, memoryOrder)));
+@@ -1291,7 +1295,7 @@ Value *Nucleus::createAtomicSub(Value *ptr, Value *value, std::memory_order memo
+ {
+ 	RR_DEBUG_INFO_UPDATE_LOC();
+ 	return V(jit->builder->CreateAtomicRMW(llvm::AtomicRMWInst::Sub, V(ptr), V(value),
+-#if LLVM_VERSION_MAJOR >= 11
++#if LLVM_VERSION_MAJOR > 11
+ 	                                       llvm::MaybeAlign(),
+ #endif
+ 	                                       atomicOrdering(true, memoryOrder)));
+@@ -1301,7 +1305,7 @@ Value *Nucleus::createAtomicAnd(Value *ptr, Value *value, std::memory_order memo
+ {
+ 	RR_DEBUG_INFO_UPDATE_LOC();
+ 	return V(jit->builder->CreateAtomicRMW(llvm::AtomicRMWInst::And, V(ptr), V(value),
+-#if LLVM_VERSION_MAJOR >= 11
++#if LLVM_VERSION_MAJOR > 11
+ 	                                       llvm::MaybeAlign(),
+ #endif
+ 	                                       atomicOrdering(true, memoryOrder)));
+@@ -1311,7 +1315,7 @@ Value *Nucleus::createAtomicOr(Value *ptr, Value *value, std::memory_order memor
+ {
+ 	RR_DEBUG_INFO_UPDATE_LOC();
+ 	return V(jit->builder->CreateAtomicRMW(llvm::AtomicRMWInst::Or, V(ptr), V(value),
+-#if LLVM_VERSION_MAJOR >= 11
++#if LLVM_VERSION_MAJOR > 11
+ 	                                       llvm::MaybeAlign(),
+ #endif
+ 	                                       atomicOrdering(true, memoryOrder)));
+@@ -1321,7 +1325,7 @@ Value *Nucleus::createAtomicXor(Value *ptr, Value *value, std::memory_order memo
+ {
+ 	RR_DEBUG_INFO_UPDATE_LOC();
+ 	return V(jit->builder->CreateAtomicRMW(llvm::AtomicRMWInst::Xor, V(ptr), V(value),
+-#if LLVM_VERSION_MAJOR >= 11
++#if LLVM_VERSION_MAJOR > 11
+ 	                                       llvm::MaybeAlign(),
+ #endif
+ 	                                       atomicOrdering(true, memoryOrder)));
+@@ -1331,7 +1335,7 @@ Value *Nucleus::createAtomicMin(Value *ptr, Value *value, std::memory_order memo
+ {
+ 	RR_DEBUG_INFO_UPDATE_LOC();
+ 	return V(jit->builder->CreateAtomicRMW(llvm::AtomicRMWInst::Min, V(ptr), V(value),
+-#if LLVM_VERSION_MAJOR >= 11
++#if LLVM_VERSION_MAJOR > 11
+ 	                                       llvm::MaybeAlign(),
+ #endif
+ 	                                       atomicOrdering(true, memoryOrder)));
+@@ -1341,7 +1345,7 @@ Value *Nucleus::createAtomicMax(Value *ptr, Value *value, std::memory_order memo
+ {
+ 	RR_DEBUG_INFO_UPDATE_LOC();
+ 	return V(jit->builder->CreateAtomicRMW(llvm::AtomicRMWInst::Max, V(ptr), V(value),
+-#if LLVM_VERSION_MAJOR >= 11
++#if LLVM_VERSION_MAJOR > 11
+ 	                                       llvm::MaybeAlign(),
+ #endif
+ 	                                       atomicOrdering(true, memoryOrder)));
+@@ -1351,7 +1355,7 @@ Value *Nucleus::createAtomicUMin(Value *ptr, Value *value, std::memory_order mem
+ {
+ 	RR_DEBUG_INFO_UPDATE_LOC();
+ 	return V(jit->builder->CreateAtomicRMW(llvm::AtomicRMWInst::UMin, V(ptr), V(value),
+-#if LLVM_VERSION_MAJOR >= 11
++#if LLVM_VERSION_MAJOR > 11
+ 	                                       llvm::MaybeAlign(),
+ #endif
+ 	                                       atomicOrdering(true, memoryOrder)));
+@@ -1361,7 +1365,7 @@ Value *Nucleus::createAtomicUMax(Value *ptr, Value *value, std::memory_order mem
+ {
+ 	RR_DEBUG_INFO_UPDATE_LOC();
+ 	return V(jit->builder->CreateAtomicRMW(llvm::AtomicRMWInst::UMax, V(ptr), V(value),
+-#if LLVM_VERSION_MAJOR >= 11
++#if LLVM_VERSION_MAJOR > 11
+ 	                                       llvm::MaybeAlign(),
+ #endif
+ 	                                       atomicOrdering(true, memoryOrder)));
+@@ -1371,7 +1375,7 @@ Value *Nucleus::createAtomicExchange(Value *ptr, Value *value, std::memory_order
+ {
+ 	RR_DEBUG_INFO_UPDATE_LOC();
+ 	return V(jit->builder->CreateAtomicRMW(llvm::AtomicRMWInst::Xchg, V(ptr), V(value),
+-#if LLVM_VERSION_MAJOR >= 11
++#if LLVM_VERSION_MAJOR > 11
+ 	                                       llvm::MaybeAlign(),
+ #endif
+ 	                                       atomicOrdering(true, memoryOrder)));
+@@ -1383,7 +1387,7 @@ Value *Nucleus::createAtomicCompareExchange(Value *ptr, Value *value, Value *com
+ 	// Note: AtomicCmpXchgInstruction returns a 2-member struct containing {result, success-flag}, not the result directly.
+ 	return V(jit->builder->CreateExtractValue(
+ 	    jit->builder->CreateAtomicCmpXchg(V(ptr), V(compare), V(value),
+-#if LLVM_VERSION_MAJOR >= 11
++#if LLVM_VERSION_MAJOR > 11
+ 	                                      llvm::MaybeAlign(),
+ #endif
+ 	                                      atomicOrdering(true, memoryOrderEqual),
+diff --git a/src/Reactor/SubzeroReactor.cpp b/src/Reactor/SubzeroReactor.cpp
+index 0a4e9d2cea87af6d209cdd8023d536f9e213865f..184372b055e9a1840d01996bc5d44ccb9c9eac28 100644
+--- a/src/Reactor/SubzeroReactor.cpp
++++ b/src/Reactor/SubzeroReactor.cpp
+@@ -309,6 +309,8 @@ private:
+ 		return false;
+ #elif defined(__mips__)
+ 		return false;
++#elif defined(__loongarch__)
++		return false;
+ #else
+ #	error "Unknown architecture"
+ #endif
+@@ -659,6 +661,8 @@ std::vector<EntryPoint> loadImage(uint8_t *const elfImage, const std::vector<con
+ 	ASSERT(sizeof(void *) == 8 && elfHeader->e_machine == EM_AARCH64);
+ #elif defined(__mips__)
+ 	ASSERT(sizeof(void *) == 4 && elfHeader->e_machine == EM_MIPS);
++#elif defined(__loongarch64)
++	ASSERT(sizeof(void *) == 8 && elfHeader->e_machine == EM_LOONGARCH);
+ #else
+ #	error "Unsupported platform"
+ #endif
+@@ -897,6 +901,8 @@ Nucleus::Nucleus()
+ #elif defined(__mips__)
+ 	Flags.setTargetArch(Ice::Target_MIPS32);
+ 	Flags.setTargetInstructionSet(Ice::BaseInstructionSet);
++#elif defined(__loongarch64)
++    //TODO
+ #else  // x86
+ 	Flags.setTargetArch(sizeof(void *) == 8 ? Ice::Target_X8664 : Ice::Target_X8632);
+ 	Flags.setTargetInstructionSet(CPUID::SSE4_1 ? Ice::X86InstructionSet_SSE4_1 : Ice::X86InstructionSet_SSE2);
+diff --git a/src/Reactor/reactor.gni b/src/Reactor/reactor.gni
+index 04fad6f8119aee6e005febb2b479cef3ce160607..37f638c32ae6482cb37e941324bd43f05a6d3183 100644
+--- a/src/Reactor/reactor.gni
++++ b/src/Reactor/reactor.gni
+@@ -10,7 +10,7 @@ import("//build_overrides/build.gni")
+ 
+ declare_args() {
+   # Subzero doesn't support ARM64, MIPS64, PPC64, and RISCV64 (only x86 and ARMv7a).
+-  supports_subzero = current_cpu != "arm64" && current_cpu != "mips64el" && current_cpu != "ppc64" && current_cpu != "riscv64"
++  supports_subzero = current_cpu != "arm64" && current_cpu != "mips64el" && current_cpu != "ppc64" && current_cpu != "riscv64" && current_cpu != "loong64"
+ }
+ 
+ declare_args() {
+diff --git a/src/System/Linux/MemFd.cpp b/src/System/Linux/MemFd.cpp
+index 1319d1121279e422cbdbe007f0ed24cd338d2cd6..0faf3b317dcec7b7d753291389564e1b1d0fffc6 100644
+--- a/src/System/Linux/MemFd.cpp
++++ b/src/System/Linux/MemFd.cpp
+@@ -35,6 +35,8 @@
+ #	define __NR_memfd_create 356
+ #elif __x86_64__
+ #	define __NR_memfd_create 319
++#elif __loongarch64
++#  define __NR_memfd_create 279
+ #endif /* __NR_memfd_create__ */
+ 
+ LinuxMemFd::~LinuxMemFd()
+diff --git a/src/Vulkan/BUILD.gn b/src/Vulkan/BUILD.gn
+index 5556abdf097f203f858226718f4600106014f590..80328ff8acadfb78f383b5797571dd3194dfb030 100644
+--- a/src/Vulkan/BUILD.gn
++++ b/src/Vulkan/BUILD.gn
+@@ -194,6 +194,9 @@ swiftshader_shared_library("swiftshader_libvulkan") {
+       "-Wl,-exported_symbols_list," +
+           rebase_path("vk_swiftshader.exports", root_build_dir),
+     ]
++    if (current_cpu != "x64") {
++      ldflags += [ "-Wl,-lz" ]
++    }
+   } else if (is_linux || is_chromeos || is_fuchsia) {
+     inputs = [
+       "vk_swiftshader.lds",
