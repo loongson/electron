@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Fri, 15 Dec 2023 09:42:33 +0000
+Subject: fix loongarch64 build
+
+
+diff --git a/src/dawn/common/Platform.h b/src/dawn/common/Platform.h
+index dc8d79c01bff302d7dfd24bcd86f6f8b8c4824dd..cfadb5d9739a406a2a03a1d2762d4d9679bf518c 100644
+--- a/src/dawn/common/Platform.h
++++ b/src/dawn/common/Platform.h
+@@ -117,7 +117,7 @@
+ 
+ #elif defined(__loongarch__)
+ #define DAWN_PLATFORM_IS_LOONGARCH 1
+-#if _LOONGARCH_SIM == _ABILP32
++#if __loongarch_grlen == 32
+ #define DAWN_PLATFORM_IS_LOONGARCH32 1
+ #else
+ #define DAWN_PLATFORM_IS_LOONGARCH64 1
