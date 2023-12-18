@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Mon, 18 Dec 2023 07:48:38 +0000
+Subject: fix swiftshader build
+
+
+diff --git a/third_party/llvm-11.0/llvm/include/llvm/Demangle/ItaniumDemangle.h b/third_party/llvm-11.0/llvm/include/llvm/Demangle/ItaniumDemangle.h
+index 6ab873218386b833e1eee31e4b88e149e62f6305..4a6bb41afd09c20bf39bee6844f8b201e295f7ab 100644
+--- a/third_party/llvm-11.0/llvm/include/llvm/Demangle/ItaniumDemangle.h
++++ b/third_party/llvm-11.0/llvm/include/llvm/Demangle/ItaniumDemangle.h
+@@ -28,6 +28,7 @@
+ #include <cstring>
+ #include <numeric>
+ #include <utility>
++#include <exception>
+ 
+ #define FOR_EACH_NODE_KIND(X) \
+     X(NodeArrayNode) \
+diff --git a/third_party/llvm-11.0/llvm/include/llvm/Demangle/Utility.h b/third_party/llvm-11.0/llvm/include/llvm/Demangle/Utility.h
+index 04e1936ebbe7835d41a1e4e9e14b8f8a5b40bf8c..908f608cb3ad6afcf2432ef6c3956bc445444801 100644
+--- a/third_party/llvm-11.0/llvm/include/llvm/Demangle/Utility.h
++++ b/third_party/llvm-11.0/llvm/include/llvm/Demangle/Utility.h
+@@ -19,6 +19,7 @@
+ #include <cstring>
+ #include <iterator>
+ #include <limits>
++#include <exception>
+ 
+ DEMANGLE_NAMESPACE_BEGIN
+ 

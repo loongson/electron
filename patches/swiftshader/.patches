@@ -1,0 +1,5 @@
+marl_add_loongarch64_support.patch
+swiftshader_add_llvm_11_0_0_source_patch-1.patch
+swiftshader_add_llvm_11_0_0_source_patch-2.patch
+swiftshader_add_support_for_loongarch64.patch
+fix_swiftshader_build.patch
