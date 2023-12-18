@@ -1,0 +1,136 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Thu, 23 Feb 2023 12:09:16 +0000
+Subject: Chromium build configuration adds loongarch64 support
+
+
+diff --git a/build/config/sysroot.gni b/build/config/sysroot.gni
+index dea380727e732dbaf46bef6341612d38e9059a9e..1a570e4af4ecb6ee84dc2c7cacf4a21a7a5ad3f5 100644
+--- a/build/config/sysroot.gni
++++ b/build/config/sysroot.gni
+@@ -21,7 +21,8 @@ declare_args() {
+   # is empty, default sysroot is calculated.
+   use_sysroot = current_cpu == "x86" || current_cpu == "x64" ||
+                 current_cpu == "arm" || current_cpu == "arm64" ||
+-                current_cpu == "mipsel" || current_cpu == "mips64el"
++                current_cpu == "mipsel" || current_cpu == "mips64el" ||
++                current_cpu == "loong64"
+ }
+ 
+ if (sysroot == "") {
+@@ -48,6 +49,8 @@ if (sysroot == "") {
+       sysroot = "$target_sysroot_dir/debian_bullseye_arm-sysroot"
+     } else if (current_cpu == "arm64") {
+       sysroot = "$target_sysroot_dir/debian_bullseye_arm64-sysroot"
++    } else if (current_cpu == "loong64") {
++      sysroot = "$target_sysroot_dir/debian_bullseye_loong64-sysroot"
+     } else {
+       assert(false, "No linux sysroot for cpu: $target_cpu")
+     }
+diff --git a/build/linux/sysroot_scripts/install-sysroot.py b/build/linux/sysroot_scripts/install-sysroot.py
+index 4dca0c2b63425b1592d0ee48b721402b8bebe347..9776ccc6b80a58b70d1389406a06add9da835684 100755
+--- a/build/linux/sysroot_scripts/install-sysroot.py
++++ b/build/linux/sysroot_scripts/install-sysroot.py
+@@ -46,13 +46,14 @@ SYSTOORS_CONFIG_DIR = os.path.join(SRC_DIR, 'electron', 'script')
+ URL_PREFIX = 'https://dev-cdn.electronjs.org'
+ URL_PATH = 'linux-sysroots'
+ 
+-VALID_ARCHS = ('arm', 'arm64', 'i386', 'amd64', 'mips', 'mips64el')
++VALID_ARCHS = ('arm', 'arm64', 'i386', 'amd64', 'mips', 'mips64el', 'loong64')
+ 
+ ARCH_TRANSLATIONS = {
+     'x64': 'amd64',
+     'x86': 'i386',
+     'mipsel': 'mips',
+     'mips64': 'mips64el',
++    'loongarch64': 'loong64',
+ }
+ 
+ DEFAULT_TARGET_PLATFORM = 'bullseye'
+diff --git a/build/linux/sysroot_scripts/sysroots.json b/build/linux/sysroot_scripts/sysroots.json
+index 355c350b20c04df37bc083f27d54576d170f90e9..b72bf88fec9364786e5c54852a2245fce4b47e11 100644
+--- a/build/linux/sysroot_scripts/sysroots.json
++++ b/build/linux/sysroot_scripts/sysroots.json
+@@ -40,5 +40,11 @@
+         "Sha1Sum": "817d0905f294c9c5af828fa5c5b814dbe9610a24",
+         "SysrootDir": "debian_bullseye_mips64el-sysroot",
+         "Tarball": "debian_bullseye_mips64el_sysroot.tar.xz"
++    },
++    "bullseye_loong64": {
++        "Key": "20221105T211506Z-0",
++        "Sha1Sum": "817d0905f294c9c5af828fa5c5b814dbe9610a24",
++        "SysrootDir": "debian_bullseye_loong64-sysroot",
++        "Tarball": "debian_bullseye_loong64_sysroot.tar.xz"
+     }
+ }
+diff --git a/third_party/breakpad/BUILD.gn b/third_party/breakpad/BUILD.gn
+index 8c677031dbc3b1fcd797e9682ca11897a79d0d05..19b64ccb919c4ab901d01c2dbaf1a1ec53f1168a 100644
+--- a/third_party/breakpad/BUILD.gn
++++ b/third_party/breakpad/BUILD.gn
+@@ -118,6 +118,8 @@ if (!is_win) {
+         "breakpad/src/processor/stackwalker_arm.h",
+         "breakpad/src/processor/stackwalker_arm64.cc",
+         "breakpad/src/processor/stackwalker_arm64.h",
++        "breakpad/src/processor/stackwalker_loongarch64.cc",
++        "breakpad/src/processor/stackwalker_loongarch64.h",
+         "breakpad/src/processor/stackwalker_mips.cc",
+         "breakpad/src/processor/stackwalker_mips.h",
+         "breakpad/src/processor/stackwalker_ppc.cc",
+diff --git a/third_party/dav1d/config/linux-noasm/generic/config.h b/third_party/dav1d/config/linux-noasm/generic/config.h
+index e988c20f2ec202b0a449851fa33a49dc162b02d7..dc3ad9ec0bb27c97b062f64c04e9cdeb0d021f2c 100644
+--- a/third_party/dav1d/config/linux-noasm/generic/config.h
++++ b/third_party/dav1d/config/linux-noasm/generic/config.h
+@@ -5,6 +5,8 @@
+ 
+ #pragma once
+ 
++#define ARCH_LOONG64 1
++
+ #define ARCH_AARCH64 0
+ 
+ #define ARCH_ARM 0
+diff --git a/third_party/libgav1/options.gni b/third_party/libgav1/options.gni
+index 0aab011ea82ac0ed602c30c5f7000ebb25436e1a..6a084f26aae7152b8f47fdaa1b0eb36b9b088643 100644
+--- a/third_party/libgav1/options.gni
++++ b/third_party/libgav1/options.gni
+@@ -9,5 +9,5 @@ declare_args() {
+   use_libgav1_parser =
+       (is_chromeos || is_linux || is_win) &&
+       (target_cpu == "x86" || target_cpu == "x64" || target_cpu == "arm" ||
+-       target_cpu == "arm64" || target_cpu == "ppc64")
++       target_cpu == "arm64" || target_cpu == "ppc64"  || target_cpu == "loong64")
+ }
+diff --git a/third_party/libvpx/BUILD.gn b/third_party/libvpx/BUILD.gn
+index c5aad48a48d6b6cb5b3e08ffd579c959bda782d6..7d6140d6771dec934a8da121b21f8b623b3d1a5d 100644
+--- a/third_party/libvpx/BUILD.gn
++++ b/third_party/libvpx/BUILD.gn
+@@ -38,7 +38,7 @@ if (current_cpu == "x86") {
+ } else if (current_cpu == "riscv64") {
+   cpu_arch_full = "generic"
+ } else if (current_cpu == "loong64") {
+-  cpu_arch_full = "loongarch"
++  cpu_arch_full = "generic"
+ } else {
+   cpu_arch_full = current_cpu
+ }
+@@ -423,8 +423,8 @@ static_library("libvpx") {
+     sources = libvpx_srcs_generic
+     public_deps = [ ":libvpx_generic_headers" ]
+   } else if (current_cpu == "loong64") {
+-    sources = libvpx_srcs_loongarch
+-    public_deps = [ ":libvpx_loongarch_headers" ]
++    sources = libvpx_srcs_generic
++    public_deps = [ ":libvpx_generic_headers" ]
+   }
+ 
+   configs -= [ "//build/config/compiler:chromium_code" ]
+@@ -452,9 +452,6 @@ static_library("libvpx") {
+   if (current_cpu == "arm" && arm_assembly_sources != []) {
+     deps += [ ":libvpx_assembly_arm" ]
+   }
+-  if (current_cpu == "loong64") {
+-    deps += [ ":libvpx_loongarch_lsx" ]
+-  }
+ 
+   public_configs = [ ":libvpx_external_config" ]
+ }

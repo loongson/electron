@@ -146,3 +146,8 @@ cherry-pick-74a2eb9c8cb2.patch
 cherry-pick-26175b0903d8.patch
 fix_use_delegated_generic_capturer_when_available.patch
 cherry-pick-b11e7d07a6f4.patch
+crashpad_add_support_for_loongarch64.patch
+add_loongarch64_architecture_support.patch
+chromium_add_support_for_loongarch64.patch
+chromium_build_configuration_adds_loongarch64_support.patch
+support_loongarch64_build.patch

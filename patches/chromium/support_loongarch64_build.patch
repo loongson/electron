@@ -1,0 +1,69 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Thu, 14 Dec 2023 03:16:36 +0000
+Subject: support loongarch64 build
+
+using sysroot form https://mirrors.wsyu.edu.cn/fedora/linux/Yongbao/chromium-sysroot/
+using llvm 16.0.6 from https://github.com/llvm/llvm-project
+
+diff --git a/build/config/linux/pkg-config.py b/build/config/linux/pkg-config.py
+index 2e38c7ffbd106840b200eeca3c80b9536cd0102d..5e3f232ade502d3bf9e663935c5dc953a1a2159f 100755
+--- a/build/config/linux/pkg-config.py
++++ b/build/config/linux/pkg-config.py
+@@ -58,7 +58,10 @@ def SetConfigPath(options):
+     print("You must specify an architecture via -a if using a sysroot.")
+     sys.exit(1)
+ 
+-  libdir = sysroot + '/usr/' + options.system_libdir + '/pkgconfig'
++  if arch == 'loong64':
++    libdir = sysroot + '/usr/' + 'lib64' + '/pkgconfig'
++  else:
++    libdir = sysroot + '/usr/' + options.system_libdir + '/pkgconfig'
+   libdir += ':' + sysroot + '/usr/share/pkgconfig'
+   os.environ['PKG_CONFIG_LIBDIR'] = libdir
+   return libdir
+diff --git a/sandbox/linux/syscall_broker/broker_client.cc b/sandbox/linux/syscall_broker/broker_client.cc
+index 329cd662cc1e812f0ba52d812422339b35b5cb25..d406c2228b71dfb47df5cfe9e7f1fcb479b0c481 100644
+--- a/sandbox/linux/syscall_broker/broker_client.cc
++++ b/sandbox/linux/syscall_broker/broker_client.cc
+@@ -200,9 +200,9 @@ int BrokerClient::Statx(const char* pathname,
+     return -EFAULT;
+ 
+   if (fast_check_in_client_ &&
+-      !CommandStatIsSafe(policy_.allowed_command_set, *policy_.file_permissions,
+-                         pathname, nullptr)) {
+-    return -policy_.file_permissions->denied_errno();
++      !CommandStatIsSafe(policy_->allowed_command_set, *policy_->file_permissions,
++                         pathname)) {
++    return -policy_->file_permissions->denied_errno();
+   }
+   return StatFamilySyscall(COMMAND_STATX, pathname, follow_links, sb,
+                            sizeof(*sb));
+diff --git a/third_party/closure_compiler/compiler.py b/third_party/closure_compiler/compiler.py
+index c6368af73374924eb440f5314972d495312bee9b..4314f8e32086797789c2e8e4a43773f57515792f 100755
+--- a/third_party/closure_compiler/compiler.py
++++ b/third_party/closure_compiler/compiler.py
+@@ -13,8 +13,9 @@ import subprocess
+ 
+ 
+ _CURRENT_DIR = os.path.join(os.path.dirname(__file__))
+-_JAVA_PATH = os.path.join(_CURRENT_DIR, "..", "jdk", "current", "bin", "java")
+-assert os.path.isfile(_JAVA_PATH), "java only allowed in android builds"
++_JAVA_BIN = "java"
++_JDK_PATH = os.path.join(_CURRENT_DIR, "..", "jdk", "current", "bin", _JAVA_BIN)
++_JAVA_PATH = _JDK_PATH if os.path.isfile(_JDK_PATH) else _JAVA_BIN
+ 
+ class Compiler(object):
+   """Runs the Closure compiler on given source files to typecheck them
+diff --git a/third_party/crashpad/crashpad/handler/BUILD.gn b/third_party/crashpad/crashpad/handler/BUILD.gn
+index 653696c673f847cf0e0fc1325070359b12a5b61d..3c5c5176f619ceab934aa5838b1cdeec023cacc7 100644
+--- a/third_party/crashpad/crashpad/handler/BUILD.gn
++++ b/third_party/crashpad/crashpad/handler/BUILD.gn
+@@ -162,7 +162,6 @@ if (!crashpad_is_ios) {
+     sources = [ "main.cc" ]
+ 
+     deps = [
+-      "//crypto:platform",
+       ":handler",
+       "../build:default_exe_manifest_win",
+       "../compat",
