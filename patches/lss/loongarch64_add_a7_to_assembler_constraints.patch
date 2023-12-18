@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: mingtaoxt xt <mingtaoxt@gmail.com>
+Date: Tue, 11 Oct 2022 20:44:17 +0800
+Subject: loongarch64:add $a7 to assembler constraints
+
+Change-Id: I6252916f52ecb061b8b5ea80e602c25bac505132
+Reviewed-on: https://chromium-review.googlesource.com/c/linux-syscall-support/+/3945798
+Reviewed-by: Mike Frysinger <vapier@chromium.org>
+
+diff --git a/linux_syscall_support.h b/linux_syscall_support.h
+index 99a4b444918dc00de246205ad119c7461ffa4de0..ffd6a703dec0762d3a48020ebe5a18e784d72986 100644
+--- a/linux_syscall_support.h
++++ b/linux_syscall_support.h
+@@ -3950,11 +3950,11 @@ struct kernel_statx {
+     #undef  LSS_BODY
+     #define LSS_BODY(type,name,args...)                                       \
+           register int64_t __res_a0 __asm__("a0");                            \
++          register int64_t __a7 __asm__("a7") = __NR_##name;                  \
+           int64_t __res;                                                      \
+-          __asm__ __volatile__ ("li.d $a7, %1\n"                              \
+-                                "syscall 0x0\n"                               \
++          __asm__ __volatile__ ("syscall 0x0\n"                               \
+                                 : "=r"(__res_a0)                              \
+-                                : "i"(__NR_##name) , ## args                  \
++                                : "r"(__a7), ## args                          \
+                                 : LSS_SYSCALL_CLOBBERS);                      \
+           __res = __res_a0;                                                   \
+           LSS_RETURN(type, __res)
+@@ -4056,7 +4056,7 @@ struct kernel_statx {
+                              : "r"(fn), "r"(__stack), "r"(__flags), "r"(arg),
+                                "r"(__ptid), "r"(__tls), "r"(__ctid),
+                                "i"(__NR_clone), "i"(__NR_exit)
+-                             : LSS_SYSCALL_CLOBBERS);
++                             : "a7", LSS_SYSCALL_CLOBBERS);
+       __res = __res_a0;
+       }
+       LSS_RETURN(int, __res);
