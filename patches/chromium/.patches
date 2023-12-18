@@ -152,3 +152,8 @@ m114_webcodecs_fix_crash_when_changing_temporal_layer_count_in_av1.patch
 cherry-pick-933b9fad3a53.patch
 cherry-pick-b03973561862.patch
 cherry-pick-c60a1ab717c7.patch
+crashpad_add_support_for_loongarch64.patch
+sandbox_add_loongarch64_architecture_support.patch
+chromium_add_support_for_loongarch64.patch
+chromium_build_configuration_adds_loongarch64_support.patch
+support_loongarch64_build.patch
