@@ -1,0 +1,2 @@
+loongarch64_add_a7_to_assembler_constraints.patch
+fix_loongarch64_build.patch
