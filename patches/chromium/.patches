@@ -153,3 +153,9 @@ cherry-pick-3df423a5b8de.patch
 cherry-pick-9384cddc7705.patch
 cherry-pick-3f45b1af5e41.patch
 cherry-pick-e13061c50998.patch
+crashpad_add_support_for_loongarch64.patch
+sandbox_add_loongarch64_architecture_support.patch
+chromium_add_support_for_loongarch64.patch
+chromium_build_configuration_adds_loongarch64_support.patch
+support_loongarch64_build.patch
+sandbox_fix_undeclared_identifier_nr_getdents.patch
