@@ -1,1 +1,2 @@
 change_d3d12_descriptor_allocator_to_invalidate_submitted_descriptors.patch
+fix_loongarch64_build.patch
