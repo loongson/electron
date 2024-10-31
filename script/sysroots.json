@@ -41,6 +41,13 @@
         "Tarball": "debian_bullseye_mips64el_sysroot.tar.xz",
         "URL": "https://dev-cdn.electronjs.org/linux-sysroots"
     },
+    "bullseye_loong64": {
+        "Key": "20230611T210420Z-2",
+        "Sha256Sum": "c3a3bf3b0aa40ec90747c951942d40077ff6796b336818eaba6fa21564249a00",
+        "SysrootDir": "debian_bullseye_loong64-sysroot",
+        "Tarball": "debian_bullseye_loong64_sysroot.tar.xz",
+        "URL": "https://dev-cdn.electronjs.org/linux-sysroots"
+    },
     "bullseye_mipsel": {
         "Key": "20230611T210420Z-2",
         "Sha256Sum": "f08771dc7a813e7f0fd540b49a1b611416979630b0009e9ecc51f999a7543081",
