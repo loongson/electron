@@ -8,8 +8,8 @@ import { setTimeout } from 'node:timers/promises';
 
 import { ifdescribe } from './lib/spec-helpers';
 
-// FIXME: The tests are skipped on linux arm/arm64
-ifdescribe(!(['arm', 'arm64'].includes(process.arch)) || (process.platform !== 'linux'))('contentTracing', () => {
+// FIXME: The tests are skipped on linux arm/arm64/loong64/mips64el
+ifdescribe(!(['arm', 'arm64', 'loong64', 'mips64el'].includes(process.arch)) || (process.platform !== 'linux'))('contentTracing', () => {
   const record = async (options: TraceConfig | TraceCategoriesAndOptions, outputFilePath: string | undefined, recordTimeInMilliseconds = 1e1) => {
     await app.whenReady();
 
