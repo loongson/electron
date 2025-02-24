@@ -1,0 +1,20 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Mon, 18 Dec 2023 08:30:36 +0000
+Subject: fix undeclared identifier __NR_getdents
+
+fix build
+
+diff --git a/sandbox/policy/linux/bpf_network_policy_linux.cc b/sandbox/policy/linux/bpf_network_policy_linux.cc
+index 98e738a7e38be16e532f1978b12699bc50156183..51b792b706b55291097eccc2fc0f4efa596689af 100644
+--- a/sandbox/policy/linux/bpf_network_policy_linux.cc
++++ b/sandbox/policy/linux/bpf_network_policy_linux.cc
+@@ -255,7 +255,7 @@ ResultExpr NetworkProcessPolicy::EvaluateSyscall(int sysno) const {
+     case __NR_fdatasync:
+     case __NR_fsync:
+     case __NR_mremap:
+-#if !defined(__aarch64__)
++#if !defined(__aarch64__) && !defined(__loongarch_lp64)
+     case __NR_getdents:
+ #endif
+     case __NR_getdents64:

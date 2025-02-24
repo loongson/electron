@@ -1,0 +1,79 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: zhoumingtao <zhoumingtao@loongson.cn>
+Date: Thu, 20 Feb 2025 07:29:21 +0000
+Subject: fix build
+
+fix electron 26-x-y build
+
+diff --git a/build/build_config.h b/build/build_config.h
+index 2484703699208a901dde5c86589340d8003e7098..6af00f23660989f7853e10a6118baa85445c8a8a 100644
+--- a/build/build_config.h
++++ b/build/build_config.h
+@@ -337,9 +337,12 @@
+ #endif
+ #elif defined(__loongarch__)
+ #define ARCH_CPU_LOONGARCH_FAMILY 1
++#define ARCH_CPU_LOONG_FAMILY 1
+ #define ARCH_CPU_LITTLE_ENDIAN 1
+ #if __loongarch_grlen == 64
+ #define ARCH_CPU_LOONGARCH64 1
++#define ARCH_CPU_LOONG_FAMILY 1
++#define ARCH_CPU_LOONG64 1
+ #define ARCH_CPU_64_BITS 1
+ #else
+ #define ARCH_CPU_LOONGARCH32 1
+diff --git a/build/config/compiler/BUILD.gn b/build/config/compiler/BUILD.gn
+index f922bf345a37c0456df2850f0fcc545041630a19..7e56ddbbe5d6c3a8e2b4e7db34bce855da58c821 100644
+--- a/build/config/compiler/BUILD.gn
++++ b/build/config/compiler/BUILD.gn
+@@ -1635,9 +1635,9 @@ config("runtime_library") {
+ # subconfig of both chromium_code and no_chromium_code.  This way these
+ # flags are guaranteed to appear on the compile command line after -Wall.
+ config("default_warnings") {
+-  cflags = []
+-  cflags_c = []
+-  cflags_cc = []
++  cflags = ["-Wno-c++11-narrowing-const-reference"]
++  cflags_c = ["-Wno-c++11-narrowing-const-reference"]
++  cflags_cc = ["-Wno-c++11-narrowing-const-reference"]
+   ldflags = []
+ 
+   if (is_win) {
+diff --git a/sandbox/policy/linux/sandbox_linux.cc b/sandbox/policy/linux/sandbox_linux.cc
+index d7470221895c400494ddd52fca84625a8b37bc51..f875839020a6b1d4e0195459222255f2324aa429 100644
+--- a/sandbox/policy/linux/sandbox_linux.cc
++++ b/sandbox/policy/linux/sandbox_linux.cc
+@@ -551,7 +551,7 @@ bpf_dsl::ResultExpr SandboxLinux::HandleViaBroker(int sysno) const {
+   const bpf_dsl::ResultExpr handle_via_broker =
+       bpf_dsl::Trap(syscall_broker::BrokerClient::SIGSYS_Handler,
+                     broker_process_->GetBrokerClientSignalBased());
+-#if defined(__loongarch_lp64)
++#if defined(__loongarch_lp64) && defined(__NR_statx_default)
+   if (sysno == __NR_statx_default) {
+ #else
+   if (sysno == __NR_fstatat_default) {
+diff --git a/third_party/blink/renderer/platform/BUILD.gn b/third_party/blink/renderer/platform/BUILD.gn
+index ef3439d07ad4202ee91c2fdb919d8324b5e5a4ba..d9a179a09cb3a68264daefd62916cad5d597b57e 100644
+--- a/third_party/blink/renderer/platform/BUILD.gn
++++ b/third_party/blink/renderer/platform/BUILD.gn
+@@ -1591,7 +1591,7 @@ component("platform") {
+   if (current_cpu == "loong64") {
+     cflags = [
+       "-mlsx",
+-      "-flax-vector-conversions",
++      "-flax-vector-conversions=all",
+     ]
+   }
+ 
+diff --git a/third_party/crashpad/crashpad/handler/BUILD.gn b/third_party/crashpad/crashpad/handler/BUILD.gn
+index 43eb9d518e4303b7345086797bf1718670fb22b5..7c10a6f09792cd95e6979a36793161864b1047f1 100644
+--- a/third_party/crashpad/crashpad/handler/BUILD.gn
++++ b/third_party/crashpad/crashpad/handler/BUILD.gn
+@@ -166,7 +166,6 @@ if (!crashpad_is_ios) {
+     sources = [ "main.cc" ]
+ 
+     deps = [
+-      "//crypto:platform",
+       ":handler",
+       "../build:default_exe_manifest_win",
+       "../compat",

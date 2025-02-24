@@ -1,0 +1,93 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Thu, 23 Feb 2023 12:09:16 +0000
+Subject: Chromium build configuration adds loongarch64 support
+
+
+diff --git a/build/config/sysroot.gni b/build/config/sysroot.gni
+index 055c2a824623b4b076c70472575f689e7001567e..834b46729d3587d58d826eb15ad1be08dd718d1a 100644
+--- a/build/config/sysroot.gni
++++ b/build/config/sysroot.gni
+@@ -22,7 +22,8 @@ declare_args() {
+   use_sysroot =
+       current_cpu == "x86" || current_cpu == "x64" || current_cpu == "arm" ||
+       current_cpu == "arm64" || current_cpu == "mipsel" ||
+-      current_cpu == "mips64el" || current_cpu == "riscv64"
++      current_cpu == "mips64el" || current_cpu == "riscv64" ||
++      current_cpu == "loong64"
+ }
+ 
+ if (sysroot == "") {
+@@ -49,6 +50,8 @@ if (sysroot == "") {
+       sysroot = "$target_sysroot_dir/debian_bullseye_armhf-sysroot"
+     } else if (current_cpu == "arm64") {
+       sysroot = "$target_sysroot_dir/debian_bullseye_arm64-sysroot"
++    } else if (current_cpu == "loong64") {
++      sysroot = "$target_sysroot_dir/debian_bullseye_loong64-sysroot"
+     } else {
+       assert(false, "No linux sysroot for cpu: $target_cpu")
+     }
+diff --git a/build/linux/sysroot_scripts/install-sysroot.py b/build/linux/sysroot_scripts/install-sysroot.py
+index da0b2142ca3fa9d4228e2592b8be9930ee1acdb3..ec8e164bc47fc5d3729a8871bd1a336b2bab3375 100755
+--- a/build/linux/sysroot_scripts/install-sysroot.py
++++ b/build/linux/sysroot_scripts/install-sysroot.py
+@@ -39,7 +39,7 @@ SYSTOORS_CONFIG_DIR = os.path.join(SRC_DIR, 'electron', 'script')
+ URL_PREFIX = 'https://dev-cdn.electronjs.org'
+ URL_PATH = 'linux-sysroots'
+ 
+-VALID_ARCHS = ('amd64', 'i386', 'armhf', 'arm64', 'armel', 'mipsel', 'mips64el')
++VALID_ARCHS = ('amd64', 'i386', 'armhf', 'arm64', 'armel', 'mipsel', 'mips64el', 'loong64')
+ 
+ ARCH_TRANSLATIONS = {
+     'x64': 'amd64',
+@@ -47,6 +47,7 @@ ARCH_TRANSLATIONS = {
+     'arm': 'armhf',
+     'mips': 'mipsel',
+     'mips64': 'mips64el',
++    'loongarch64': 'loong64',
+ }
+ 
+ DEFAULT_TARGET_PLATFORM = 'bullseye'
+diff --git a/build/linux/sysroot_scripts/sysroots.json b/build/linux/sysroot_scripts/sysroots.json
+index 247969179d0b0950a4d00aed8f86cb2d14e3df56..25e583dbfec78640a551c3ca79778b58181a9948 100644
+--- a/build/linux/sysroot_scripts/sysroots.json
++++ b/build/linux/sysroot_scripts/sysroots.json
+@@ -35,6 +35,12 @@
+         "SysrootDir": "debian_bullseye_mips64el-sysroot",
+         "Tarball": "debian_bullseye_mips64el_sysroot.tar.xz"
+     },
++    "bullseye_loong64": {
++        "Key": "20230611T210420Z-2",
++        "Sha1Sum": "3ce49d1c6b5fef17ad512f2d663a175829ae0b72",
++        "SysrootDir": "debian_bullseye_loong64-sysroot",
++        "Tarball": "debian_bullseye_loong64_sysroot.tar.xz"
++    },
+     "bullseye_mipsel": {
+         "Key": "20230611T210420Z-2",
+         "Sha1Sum": "1b857baabd7999ff0d6949a8973f896836ac45ac",
+diff --git a/third_party/breakpad/BUILD.gn b/third_party/breakpad/BUILD.gn
+index ca8ac723da89e7536a0f1b4679ceb077e805a02c..fb29b42884026a7b155d4040d45fd29e61657231 100644
+--- a/third_party/breakpad/BUILD.gn
++++ b/third_party/breakpad/BUILD.gn
+@@ -118,6 +118,8 @@ if (!is_win) {
+         "breakpad/src/processor/stackwalker_arm.h",
+         "breakpad/src/processor/stackwalker_arm64.cc",
+         "breakpad/src/processor/stackwalker_arm64.h",
++        "breakpad/src/processor/stackwalker_loongarch64.cc",
++        "breakpad/src/processor/stackwalker_loongarch64.h",
+         "breakpad/src/processor/stackwalker_mips.cc",
+         "breakpad/src/processor/stackwalker_mips.h",
+         "breakpad/src/processor/stackwalker_ppc.cc",
+diff --git a/third_party/dav1d/config/linux-noasm/generic/config.h b/third_party/dav1d/config/linux-noasm/generic/config.h
+index 6d864bf4a5133a59412d63ea45b9bd61c3f29b80..92afedd1d03bdde356ee665cf0be71d3869acc4d 100644
+--- a/third_party/dav1d/config/linux-noasm/generic/config.h
++++ b/third_party/dav1d/config/linux-noasm/generic/config.h
+@@ -5,6 +5,8 @@
+ 
+ #pragma once
+ 
++#define ARCH_LOONG64 1
++
+ #define ARCH_AARCH64 0
+ 
+ #define ARCH_ARM 0
