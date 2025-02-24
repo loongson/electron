@@ -37,5 +37,7 @@
 
   "src/electron/patches/libvpx": "src/third_party/libvpx/source/libvpx",
 
+  "src/electron/patches/swiftshader": "src/third_party/swiftshader",
+
   "src/electron/patches/sqlite": "src/third_party/sqlite/src"
 }
