@@ -1,0 +1,2 @@
+loongarch_simplify_vpx_quantize_b_b_32x32_lsx_args.patch
+loongarch_fix_bugs_from_vp8_sixtap_predict4x4_16x16_lsx.patch

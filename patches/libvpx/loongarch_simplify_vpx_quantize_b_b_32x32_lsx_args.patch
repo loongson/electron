@@ -1,0 +1,88 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: yuanhecai <yuanhecai@loongson.cn>
+Date: Sat, 15 Apr 2023 11:11:16 +0800
+Subject: loongarch: simplify vpx_quantize_b/b_32x32_lsx args
+
+Bug: webm:1755
+
+Change-Id: I42fdb1c34f959dd1204b343b8192e3d9b49821b4
+
+diff --git a/test/vp9_quantize_test.cc b/test/vp9_quantize_test.cc
+index 5e3a7c2701b2e0f10aa9e99426767d98be2c76df..170932ab021ed405ac7533d3707f463135ec3d21 100644
+--- a/test/vp9_quantize_test.cc
++++ b/test/vp9_quantize_test.cc
+@@ -727,13 +727,13 @@ INSTANTIATE_TEST_SUITE_P(
+ #endif  // HAVE_VSX && !CONFIG_VP9_HIGHBITDEPTH
+ 
+ #if HAVE_LSX && !CONFIG_VP9_HIGHBITDEPTH
+-INSTANTIATE_TEST_SUITE_P(LSX, VP9QuantizeTest,
+-                         ::testing::Values(make_tuple(&vpx_quantize_b_lsx,
+-                                                      &vpx_quantize_b_c,
+-                                                      VPX_BITS_8, 16, false),
+-                                           make_tuple(&vpx_quantize_b_32x32_lsx,
+-                                                      &vpx_quantize_b_32x32_c,
+-                                                      VPX_BITS_8, 32, false)));
++INSTANTIATE_TEST_SUITE_P(
++    LSX, VP9QuantizeTest,
++    ::testing::Values(make_tuple(&vpx_quantize_b_lsx, &vpx_quantize_b_c,
++                                 VPX_BITS_8, 16, false),
++                      make_tuple(&Quant32x32Wrapper<vpx_quantize_b_32x32_lsx>,
++                                 &Quant32x32Wrapper<vpx_quantize_b_32x32_c>,
++                                 VPX_BITS_8, 32, false)));
+ #endif  // HAVE_LSX && !CONFIG_VP9_HIGHBITDEPTH
+ 
+ // Only useful to compare "Speed" test results.
+diff --git a/vpx_dsp/loongarch/quantize_lsx.c b/vpx_dsp/loongarch/quantize_lsx.c
+index 77be0bb4fe68efb3b841434671be562df7d4e5b0..80e1b4a483a832ea022e47723c3c30086b760717 100644
+--- a/vpx_dsp/loongarch/quantize_lsx.c
++++ b/vpx_dsp/loongarch/quantize_lsx.c
+@@ -11,6 +11,8 @@
+ #include "./vpx_config.h"
+ #include "./vpx_dsp_rtcd.h"
+ #include "vpx_util/loongson_intrinsics.h"
++#include "vp9/common/vp9_scan.h"
++#include "vp9/encoder/vp9_block.h"
+ 
+ static INLINE __m128i calculate_qcoeff(__m128i coeff, __m128i coeff_abs,
+                                        __m128i round, __m128i quant,
+@@ -167,31 +169,27 @@ void vpx_quantize_b_lsx(const int16_t *coeff_ptr, intptr_t n_coeffs,
+   *eob_ptr = accumulate_eob(eob);
+ }
+ 
+-void vpx_quantize_b_32x32_lsx(const int16_t *coeff_ptr, intptr_t n_coeffs,
+-                              const int16_t *zbin_ptr, const int16_t *round_ptr,
+-                              const int16_t *quant_ptr,
+-                              const int16_t *quant_shift_ptr,
+-                              int16_t *qcoeff_ptr, int16_t *dqcoeff_ptr,
++void vpx_quantize_b_32x32_lsx(const tran_low_t *coeff_ptr,
++                              const struct macroblock_plane *const mb_plane,
++                              tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr,
+                               const int16_t *dequant_ptr, uint16_t *eob_ptr,
+-                              const int16_t *scan, const int16_t *iscan) {
++                              const struct ScanOrder *const scan_order) {
+   __m128i zero = __lsx_vldi(0);
+   int index;
++  const int16_t *iscan = scan_order->iscan;
+ 
+   __m128i zbin, round, quant, dequant, quant_shift;
+   __m128i coeff0, coeff1, qcoeff0, qcoeff1, cmp_mask0, cmp_mask1;
+   __m128i eob = zero, eob0;
+ 
+-  (void)scan;
+-  (void)n_coeffs;
+-
+-  zbin = __lsx_vld(zbin_ptr, 0);
++  zbin = __lsx_vld(mb_plane->zbin, 0);
+   zbin = __lsx_vsrari_h(zbin, 1);
+-  round = __lsx_vld(round_ptr, 0);
++  round = __lsx_vld(mb_plane->round, 0);
+   round = __lsx_vsrari_h(round, 1);
+ 
+-  quant = __lsx_vld(quant_ptr, 0);
++  quant = __lsx_vld(mb_plane->quant, 0);
+   dequant = __lsx_vld(dequant_ptr, 0);
+-  quant_shift = __lsx_vld(quant_shift_ptr, 0);
++  quant_shift = __lsx_vld(mb_plane->quant_shift, 0);
+   quant_shift = __lsx_vslli_h(quant_shift, 1);
+   // Handle one DC and first 15 AC.
+   DUP2_ARG2(__lsx_vld, coeff_ptr, 0, coeff_ptr, 16, coeff0, coeff1);

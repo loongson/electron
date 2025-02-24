@@ -35,5 +35,7 @@
 
   "src/electron/patches/lss": "src/third_party/lss",
 
+  "src/electron/patches/libvpx": "src/third_party/libvpx/source/libvpx",
+
   "src/electron/patches/sqlite": "src/third_party/sqlite/src"
 }
