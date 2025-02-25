@@ -1,0 +1,166 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: zhoumingtao <zhoumingtao@loongson.cn>
+Date: Fri, 21 Feb 2025 09:25:48 +0000
+Subject: support non-constexpr page size for LoongArch64
+
+LoongArch64 may support 4k or 64k PAGESIZE
+
+diff --git a/base/allocator/partition_allocator/src/partition_alloc/address_space_randomization.h b/base/allocator/partition_allocator/src/partition_alloc/address_space_randomization.h
+index c336c5497a6637eb1b618c9e3b6602cca6cd99e3..697af3d59cf5da6a42cd7f38c5057a3b6319b9b8 100644
+--- a/base/allocator/partition_allocator/src/partition_alloc/address_space_randomization.h
++++ b/base/allocator/partition_allocator/src/partition_alloc/address_space_randomization.h
+@@ -211,8 +211,40 @@ AslrMask(uintptr_t bits) {
+         return AslrAddress(0);
+       }
+ 
++    #elif defined(ARCH_CPU_LOONGARCH64)
++
++      #if BUILDFLAG(IS_LINUX)
++
++      // Linux on loongarch64 can use 40 or 48-bit user space, depending on
++      // page size and number of levels of translation pages used. We use
++      // 39-bit as base as all setups should support this, lowered to 38-bit
++      // as ASLROffset() could cause a carry.
++      PA_ALWAYS_INLINE PAGE_ALLOCATOR_CONSTANTS_DECLARE_CONSTEXPR uintptr_t
++      ASLRMask() {
++        return AslrMask(39);
++      }
++      PA_ALWAYS_INLINE PAGE_ALLOCATOR_CONSTANTS_DECLARE_CONSTEXPR uintptr_t
++      ASLROffset() {
++        return AslrAddress(0);
++      }
++
++      #else
++
++      // ARM64 on Linux has 39-bit user space. Use 38 bits since ASLROffset()
++      // could cause a carry.
++      PA_ALWAYS_INLINE constexpr uintptr_t ASLRMask() {
++        return AslrMask(39);
++      }
++      PA_ALWAYS_INLINE constexpr uintptr_t ASLROffset() {
++        return AslrAddress(0);
++      }
++
++      #endif
++
++
+     #else  // !defined(ARCH_CPU_X86_64) && !defined(ARCH_CPU_PPC64) &&
+-           // !defined(ARCH_CPU_S390X) && !defined(ARCH_CPU_S390)
++           // !defined(ARCH_CPU_S390X) && !defined(ARCH_CPU_S390) &&
++           // !defined(ARCH_CPU_LOONGARCH64)
+ 
+       // For all other POSIX variants, use 30 bits.
+       PA_ALWAYS_INLINE constexpr uintptr_t ASLRMask() {
+diff --git a/base/allocator/partition_allocator/src/partition_alloc/page_allocator_constants.h b/base/allocator/partition_allocator/src/partition_alloc/page_allocator_constants.h
+index cb6116c43862fbd1418de984afdd10065e348a94..0d51eef131a012737fac3b9059072e2c137e7e3d 100644
+--- a/base/allocator/partition_allocator/src/partition_alloc/page_allocator_constants.h
++++ b/base/allocator/partition_allocator/src/partition_alloc/page_allocator_constants.h
+@@ -25,7 +25,8 @@
+ // elimination.
+ #define PAGE_ALLOCATOR_CONSTANTS_DECLARE_CONSTEXPR __attribute__((const))
+ 
+-#elif BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_ARM64)
++#elif (BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_ARM64)) || \
++      (BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_LOONGARCH64))
+ // This should work for all POSIX (if needed), but currently all other
+ // supported OS/architecture combinations use either hard-coded values
+ // (such as x86) or have means to determine these values without needing
+@@ -88,11 +89,11 @@ PageAllocationGranularityShift() {
+   // compiled for 64kB are likely to work on 4kB systems, 64kB is a good choice
+   // here.
+   return 16;  // 64kB
+-#elif defined(_MIPS_ARCH_LOONGSON) || defined(ARCH_CPU_LOONGARCH64)
++#elif defined(_MIPS_ARCH_LOONGSON)
+   return 14;  // 16kB
+ #elif BUILDFLAG(IS_APPLE) && defined(ARCH_CPU_64_BITS)
+   return static_cast<size_t>(vm_page_shift);
+-#elif BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_ARM64)
++#elif BUILDFLAG(IS_LINUX) && (defined(ARCH_CPU_ARM64) || defined(ARCH_CPU_LOONGARCH64))
+   // arm64 supports 4kb (shift = 12), 16kb (shift = 14), and 64kb (shift = 16)
+   // page sizes. Retrieve from or initialize cache.
+   size_t shift = page_characteristics.shift.load(std::memory_order_relaxed);
+@@ -113,7 +114,8 @@ PageAllocationGranularity() {
+   // This is literally equivalent to |1 << PageAllocationGranularityShift()|
+   // below, but was separated out for IS_APPLE to avoid << on a non-constexpr.
+   return vm_page_size;
+-#elif BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_ARM64)
++#elif (BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_ARM64)) || \
++      (BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_LOONGARCH64))
+   // arm64 supports 4kb, 16kb, and 64kb page sizes. Retrieve from or
+   // initialize cache.
+   size_t size = page_characteristics.size.load(std::memory_order_relaxed);
+@@ -152,7 +154,8 @@ SystemPageShift() {
+ PA_ALWAYS_INLINE PAGE_ALLOCATOR_CONSTANTS_DECLARE_CONSTEXPR size_t
+ SystemPageSize() {
+ #if (BUILDFLAG(IS_APPLE) && defined(ARCH_CPU_64_BITS)) || \
+-    (BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_ARM64))
++    (BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_ARM64)) || \
++    (BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_LOONGARCH64))
+   // This is literally equivalent to |1 << SystemPageShift()| below, but was
+   // separated out for 64-bit IS_APPLE and arm64 on Linux to avoid << on a
+   // non-constexpr.
+diff --git a/base/allocator/partition_allocator/src/partition_alloc/partition_address_space.cc b/base/allocator/partition_allocator/src/partition_alloc/partition_address_space.cc
+index 8df4cc0cbb22c5447f9e84c15e84f3f625ef20e0..441782c9967010f692be5816b64c1c30611d2199 100644
+--- a/base/allocator/partition_allocator/src/partition_alloc/partition_address_space.cc
++++ b/base/allocator/partition_allocator/src/partition_alloc/partition_address_space.cc
+@@ -420,7 +420,8 @@ void PartitionAddressSpace::UninitThreadIsolatedPoolForTesting() {
+ }
+ #endif
+ 
+-#if BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_ARM64)
++#if (BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_ARM64)) || \
++    (BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_LOONGARCH64))
+ 
+ PageCharacteristics page_characteristics;
+ 
+diff --git a/base/allocator/partition_allocator/src/partition_alloc/partition_alloc_constants.h b/base/allocator/partition_allocator/src/partition_alloc/partition_alloc_constants.h
+index cddebf7f8ef7edd3f063567b08388445dd5c516d..a49ba4fbeabc88b8f0d3ca89997cca033dc186df 100644
+--- a/base/allocator/partition_allocator/src/partition_alloc/partition_alloc_constants.h
++++ b/base/allocator/partition_allocator/src/partition_alloc/partition_alloc_constants.h
+@@ -96,7 +96,7 @@ constexpr size_t kPartitionCachelineSize = 64;
+ // other constant values, we pack _all_ `PartitionRoot::Alloc` sizes perfectly
+ // up against the end of a system page.
+ 
+-#if defined(_MIPS_ARCH_LOONGSON) || defined(ARCH_CPU_LOONGARCH64)
++#if defined(_MIPS_ARCH_LOONGSON)
+ PA_ALWAYS_INLINE PAGE_ALLOCATOR_CONSTANTS_DECLARE_CONSTEXPR size_t
+ PartitionPageShift() {
+   return 16;  // 64 KiB
+@@ -107,7 +107,8 @@ PartitionPageShift() {
+   return 18;  // 256 KiB
+ }
+ #elif (BUILDFLAG(IS_APPLE) && defined(ARCH_CPU_64_BITS)) || \
+-    (BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_ARM64))
++    (BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_ARM64)) || \
++    (BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_LOONGARCH64))
+ PA_ALWAYS_INLINE PAGE_ALLOCATOR_CONSTANTS_DECLARE_CONSTEXPR size_t
+ PartitionPageShift() {
+   return PageAllocationGranularityShift() + 2;
+diff --git a/base/allocator/partition_allocator/src/partition_alloc/partition_page_constants.h b/base/allocator/partition_allocator/src/partition_alloc/partition_page_constants.h
+index b7b1a81c52967aab29e6bc2a4d1850c398cd0646..18071d414bf84d5dbefc560b1d814f70256b47dd 100644
+--- a/base/allocator/partition_allocator/src/partition_alloc/partition_page_constants.h
++++ b/base/allocator/partition_allocator/src/partition_alloc/partition_page_constants.h
+@@ -16,7 +16,8 @@ namespace partition_alloc::internal {
+ // (1 << 12 or 1 << 14), as checked in PartitionRoot::Init(). And
+ // PartitionPageSize() is 4 times the OS page size.
+ static constexpr size_t kMaxSlotsPerSlotSpan = 4 * (1 << 14) / kSmallestBucket;
+-#elif BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_ARM64)
++#elif (BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_ARM64)) || \
++      (BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_LOONGARCH64))
+ // System page size can be 4, 16, or 64 kiB on Linux on arm64. 64 kiB is
+ // currently (kMaxSlotsPerSlotSpanBits == 13) not supported by the code,
+ // so we use the 16 kiB maximum (64 kiB will crash).
+diff --git a/base/allocator/partition_allocator/src/partition_alloc/partition_root.cc b/base/allocator/partition_allocator/src/partition_alloc/partition_root.cc
+index a0e8d36a942c5247e72f5a63a95e86a7f71b192f..06491d4463d76b4ea9d602d0878f8d243bb0326d 100644
+--- a/base/allocator/partition_allocator/src/partition_alloc/partition_root.cc
++++ b/base/allocator/partition_allocator/src/partition_alloc/partition_root.cc
+@@ -379,7 +379,8 @@ static size_t PartitionPurgeSlotSpan(PartitionRoot* root,
+   constexpr size_t kMaxSlotCount =
+       (PartitionPageSize() * kMaxPartitionPagesPerRegularSlotSpan) /
+       MinPurgeableSlotSize();
+-#elif BUILDFLAG(IS_APPLE) || (BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_ARM64))
++#elif BUILDFLAG(IS_APPLE) || (BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_ARM64)) || \
++      (BUILDFLAG(IS_LINUX) && defined(ARCH_CPU_LOONGARCH64))
+   // It's better for slot_usage to be stack-allocated and fixed-size, which
+   // demands that its size be constexpr. On IS_APPLE and Linux on arm64,
+   // PartitionPageSize() is always SystemPageSize() << 2, so regardless of
