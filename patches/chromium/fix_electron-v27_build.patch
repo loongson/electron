@@ -1,0 +1,156 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Thu, 28 Mar 2024 11:29:39 +0800
+Subject: fix electron-v27 build
+
+add rust support
+use clang/llvm 18
+
+diff --git a/build/build_config.h b/build/build_config.h
+index 2484703699208a901dde5c86589340d8003e7098..f95ac8bb07a030446ad033b949707002350b2364 100644
+--- a/build/build_config.h
++++ b/build/build_config.h
+@@ -337,9 +337,11 @@
+ #endif
+ #elif defined(__loongarch__)
+ #define ARCH_CPU_LOONGARCH_FAMILY 1
++#define ARCH_CPU_LOONG_FAMILY 1
+ #define ARCH_CPU_LITTLE_ENDIAN 1
+ #if __loongarch_grlen == 64
+ #define ARCH_CPU_LOONGARCH64 1
++#define ARCH_CPU_LOONG64 1
+ #define ARCH_CPU_64_BITS 1
+ #else
+ #define ARCH_CPU_LOONGARCH32 1
+diff --git a/build/config/clang/BUILD.gn b/build/config/clang/BUILD.gn
+index fe044e29e428b5741329e1b9a4a5f07fa2278be7..fe67f3bf4a708bcb87446096e5a4c75872211e68 100644
+--- a/build/config/clang/BUILD.gn
++++ b/build/config/clang/BUILD.gn
+@@ -124,6 +124,8 @@ template("clang_lib") {
+           _dir = "armv7-unknown-linux-gnueabihf"
+         } else if (current_cpu == "arm64") {
+           _dir = "aarch64-unknown-linux-gnu"
++        } else if (current_cpu == "loong64") {
++          _dir = "loongarch64-unknown-linux-gnu"
+         } else {
+           assert(false)  # Unhandled cpu type
+         }
+diff --git a/build/config/compiler/BUILD.gn b/build/config/compiler/BUILD.gn
+index 06812fb9c2188aeaa82441347cdee9d1b26aeca2..8a3a980a2f2ba850db5c3121e12f948bab7a50b5 100644
+--- a/build/config/compiler/BUILD.gn
++++ b/build/config/compiler/BUILD.gn
+@@ -1387,6 +1387,7 @@ config("compiler_cpu_abi") {
+         "-mabi=lp64d",
+         "-mcmodel=medium",
+       ]
++      rustflags = [ "-Ccode-model=large" ]
+     } else if (current_cpu == "s390x") {
+       cflags += [ "-m64" ]
+       ldflags += [ "-m64" ]
+@@ -1643,9 +1644,9 @@ config("runtime_library") {
+ # subconfig of both chromium_code and no_chromium_code.  This way these
+ # flags are guaranteed to appear on the compile command line after -Wall.
+ config("default_warnings") {
+-  cflags = []
+-  cflags_c = []
+-  cflags_cc = []
++  cflags = ["-Wno-c++11-narrowing-const-reference"]
++  cflags_c = ["-Wno-c++11-narrowing-const-reference"]
++  cflags_cc = ["-Wno-c++11-narrowing-const-reference"]
+   ldflags = []
+ 
+   if (is_win) {
+diff --git a/build/config/rust.gni b/build/config/rust.gni
+index 77313e003aad454e8a7a7c6d2e6b656a03b31857..309b698086455477a5808df1997cd1a2d492f708 100644
+--- a/build/config/rust.gni
++++ b/build/config/rust.gni
+@@ -185,6 +185,8 @@ if (is_linux || is_chromeos) {
+     rust_abi_target = "i686-unknown-linux-gnu"
+   } else if (current_cpu == "x64") {
+     rust_abi_target = "x86_64-unknown-linux-gnu"
++  } else if (current_cpu == "loong64") {
++    rust_abi_target = "loongarch64-unknown-linux-gnu"
+   } else if (current_cpu == "arm") {
+     if (arm_float_abi == "hard") {
+       float_suffix = "hf"
+@@ -285,6 +287,8 @@ if (current_cpu == "x86") {
+   rust_target_arch = "powerpc64"
+ } else if (current_cpu == "riscv64") {
+   rust_target_arch = "riscv64"
++} else if (current_cpu == "loong64") {
++  rust_target_arch = "loongarch64"
+ }
+ 
+ assert(!toolchain_has_rust || rust_target_arch != "")
+diff --git a/build/toolchain/toolchain.gni b/build/toolchain/toolchain.gni
+index 4a0b4f61005a0e088f11c0b575a01fd8df431e6d..8228536b4aa640e04252c0c878752ae3dc3e1204 100644
+--- a/build/toolchain/toolchain.gni
++++ b/build/toolchain/toolchain.gni
+@@ -42,7 +42,7 @@ declare_args() {
+     clang_version = "18"
+   } else {
+     # TODO(crbug.com/1467585): Remove in the next clang roll
+-    clang_version = "17"
++    clang_version = "18"
+   }
+ }
+ 
+diff --git a/extensions/common/api/runtime.json b/extensions/common/api/runtime.json
+index c4ea499471812eae5671ee522aa9cad2d5dd991b..37615dcd9d101f0d26e04445867202699f717fc8 100644
+--- a/extensions/common/api/runtime.json
++++ b/extensions/common/api/runtime.json
+@@ -101,7 +101,8 @@
+             {"name": "x86-32", "description": "Specifies the processer architecture as x86-32."},
+             {"name": "x86-64", "description": "Specifies the processer architecture as x86-64."},
+             {"name": "mips", "description": "Specifies the processer architecture as mips."},
+-            {"name": "mips64", "description": "Specifies the processer architecture as mips64."}
++            {"name": "mips64", "description": "Specifies the processer architecture as mips64."},
++            {"name": "mips64el", "description": "Specifies the processer architecture as mips64el."},
+             {"name": "loong64", "description": "Specifies the processer architecture as loong64."}
+          ],
+         "description": "The machine's processor architecture."
+@@ -115,7 +116,8 @@
+           {"name": "x86-32", "description": "Specifies the native client architecture as x86-32."},
+           {"name": "x86-64", "description": "Specifies the native client architecture as x86-64."},
+           {"name": "mips", "description": "Specifies the native client architecture as mips."},
+-          {"name": "mips64", "description": "Specifies the native client architecture as mips64."}
++          {"name": "mips64", "description": "Specifies the native client architecture as mips64."},
++          {"name": "mips64el", "description": "Specifies the native client architecture as mips64el."},
+           {"name": "loong64", "description": "Specifies the native client architecture as loong64."}
+         ]
+       },
+diff --git a/third_party/blink/renderer/platform/BUILD.gn b/third_party/blink/renderer/platform/BUILD.gn
+index 5ecdd70e2152ac90159cd98a7fb20a5128931ca0..8c80a956e131f5f08242cc82baafbc62d43fb648 100644
+--- a/third_party/blink/renderer/platform/BUILD.gn
++++ b/third_party/blink/renderer/platform/BUILD.gn
+@@ -1591,7 +1591,7 @@ component("platform") {
+   if (current_cpu == "loong64") {
+     cflags = [
+       "-mlsx",
+-      "-flax-vector-conversions",
++      "-flax-vector-conversions=all",
+     ]
+   }
+ 
+diff --git a/tools/clang/scripts/build.py b/tools/clang/scripts/build.py
+index 2e84b05083e66513098f242409620ea35c3f95bd..a464839f44dbf9eb2b6b622b51fccf4cb725f4b3 100755
+--- a/tools/clang/scripts/build.py
++++ b/tools/clang/scripts/build.py
+@@ -1227,6 +1227,17 @@ def main():
+         "sanitizers":
+         True,
+     }
++    runtimes_triples_args['loongarch64-unknown-linux-gnu'] = {
++        "args": [
++            'CMAKE_SYSROOT=/home/builduser/build-tools/sysroot-abi2.0/debian_bullseye_loong64-sysroot',
++            # Can't run tests on x86 host.
++            'LLVM_INCLUDE_TESTS=OFF',
++        ],
++        "profile":
++        True,
++        "sanitizers":
++        True,
++    }
+   elif sys.platform == 'win32':
+     sysroot = os.path.dirname(os.path.dirname(GetWinSDKDir()))
+     runtimes_triples_args['i386-pc-windows-msvc'] = {

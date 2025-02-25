@@ -1,0 +1,94 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Thu, 23 Feb 2023 12:09:16 +0000
+Subject: Chromium build configuration adds loongarch64 support
+
+
+diff --git a/build/config/sysroot.gni b/build/config/sysroot.gni
+index 0f36edd9e5bb2db8bbca6d18d3f7eb96afd04a08..b9a3be40d4ea835a7f29a5f37b8227fedd7abaaf 100644
+--- a/build/config/sysroot.gni
++++ b/build/config/sysroot.gni
+@@ -22,7 +22,8 @@ declare_args() {
+   use_sysroot =
+       current_cpu == "x86" || current_cpu == "x64" || current_cpu == "arm" ||
+       current_cpu == "arm64" || current_cpu == "mipsel" ||
+-      current_cpu == "mips64el" || (current_cpu == "riscv64" && is_android)
++      current_cpu == "mips64el" || (current_cpu == "riscv64" && is_android) ||
++      current_cpu == "loong64"
+ }
+ 
+ if (sysroot == "") {
+@@ -49,6 +50,8 @@ if (sysroot == "") {
+       sysroot = "$target_sysroot_dir/debian_bullseye_armhf-sysroot"
+     } else if (current_cpu == "arm64") {
+       sysroot = "$target_sysroot_dir/debian_bullseye_arm64-sysroot"
++    } else if (current_cpu == "loong64") {
++      sysroot = "$target_sysroot_dir/debian_bullseye_loong64-sysroot"
+     } else {
+       assert(false, "No linux sysroot for cpu: $target_cpu")
+     }
+diff --git a/build/linux/sysroot_scripts/install-sysroot.py b/build/linux/sysroot_scripts/install-sysroot.py
+index a2ac8305d8ca74edf0c4458e2b4a02d91abee39f..678d46281cf00a909666d93a90a1c12f478254b4 100755
+--- a/build/linux/sysroot_scripts/install-sysroot.py
++++ b/build/linux/sysroot_scripts/install-sysroot.py
+@@ -35,7 +35,7 @@ from urllib.request import urlopen
+ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(SCRIPT_DIR)))
+ 
+-VALID_ARCHS = ('amd64', 'i386', 'armhf', 'arm64', 'armel', 'mipsel', 'mips64el')
++VALID_ARCHS = ('amd64', 'i386', 'armhf', 'arm64', 'armel', 'mipsel', 'mips64el', 'loong64')
+ 
+ ARCH_TRANSLATIONS = {
+     'x64': 'amd64',
+@@ -43,6 +43,7 @@ ARCH_TRANSLATIONS = {
+     'arm': 'armhf',
+     'mips': 'mipsel',
+     'mips64': 'mips64el',
++    'loongarch64': 'loong64',
+ }
+ 
+ DEFAULT_SYSROOTS_PATH = os.path.join(os.path.relpath(SCRIPT_DIR, SRC_DIR),
+diff --git a/build/linux/sysroot_scripts/sysroots.json b/build/linux/sysroot_scripts/sysroots.json
+index 156d4c630ec39aae9af4f5c4e76d35aa510704ad..4d0c9577029c7c5e391977c945799c65d1d85db8 100644
+--- a/build/linux/sysroot_scripts/sysroots.json
++++ b/build/linux/sysroot_scripts/sysroots.json
+@@ -41,6 +41,13 @@
+         "Tarball": "debian_bullseye_mips64el_sysroot.tar.xz",
+         "URL": "https://commondatastorage.googleapis.com/chrome-linux-sysroot/toolchain"
+     },
++    "bullseye_loong64": {
++        "Key": "20230611T210420Z-2",
++        "Sha1Sum": "3ce49d1c6b5fef17ad512f2d663a175829ae0b72",
++        "SysrootDir": "debian_bullseye_loong64-sysroot",
++        "Tarball": "debian_bullseye_loong64_sysroot.tar.xz",
++        "URL": "https://commondatastorage.googleapis.com/chrome-linux-sysroot/toolchain"
++    },
+     "bullseye_mipsel": {
+         "Key": "20230611T210420Z-2",
+         "Sha1Sum": "1b857baabd7999ff0d6949a8973f896836ac45ac",
+diff --git a/third_party/breakpad/BUILD.gn b/third_party/breakpad/BUILD.gn
+index 65450488d3c9f9d9afd111550fa0bc617cd1a08f..64a57b28e004610928490fa08aed0c9b17f23b30 100644
+--- a/third_party/breakpad/BUILD.gn
++++ b/third_party/breakpad/BUILD.gn
+@@ -119,6 +119,8 @@ if (!is_win) {
+         "breakpad/src/processor/stackwalker_arm.h",
+         "breakpad/src/processor/stackwalker_arm64.cc",
+         "breakpad/src/processor/stackwalker_arm64.h",
++        "breakpad/src/processor/stackwalker_loongarch64.cc",
++        "breakpad/src/processor/stackwalker_loongarch64.h",
+         "breakpad/src/processor/stackwalker_mips.cc",
+         "breakpad/src/processor/stackwalker_mips.h",
+         "breakpad/src/processor/stackwalker_ppc.cc",
+diff --git a/third_party/dav1d/config/linux-noasm/generic/config.h b/third_party/dav1d/config/linux-noasm/generic/config.h
+index 6d864bf4a5133a59412d63ea45b9bd61c3f29b80..92afedd1d03bdde356ee665cf0be71d3869acc4d 100644
+--- a/third_party/dav1d/config/linux-noasm/generic/config.h
++++ b/third_party/dav1d/config/linux-noasm/generic/config.h
+@@ -5,6 +5,8 @@
+ 
+ #pragma once
+ 
++#define ARCH_LOONG64 1
++
+ #define ARCH_AARCH64 0
+ 
+ #define ARCH_ARM 0
