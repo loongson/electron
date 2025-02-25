@@ -1,0 +1,262 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mike Frysinger <vapier@chromium.org>
+Date: Wed, 7 Sep 2022 08:24:21 -0400
+Subject: Update license boilerplate text in source code files
+
+Normally we don't do this, but enough changes have accumulated that
+we're doing a tree-wide one-off update of the name & style.
+
+Bug: 1098010
+Change-Id: I5bdf5d4f2d227393bbea864951afd8dd66fefc79
+Reviewed-on: https://chromium-review.googlesource.com/c/linux-syscall-support/+/3877698
+Reviewed-by: Mark Seaborn <mseaborn@chromium.org>
+
+diff --git a/LICENSE b/LICENSE
+index 58ab3fba9d4c3318ea545f451bb3ecbfdd5d8f6f..b66a6b273d6b334c5197222573185b4e320190ea 100644
+--- a/LICENSE
++++ b/LICENSE
+@@ -1,5 +1,4 @@
+-Copyright (c) 2005-2011, Google Inc.
+-All rights reserved.
++Copyright 2005-2011 Google LLC
+ 
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions are
+@@ -11,7 +10,7 @@ notice, this list of conditions and the following disclaimer.
+ copyright notice, this list of conditions and the following disclaimer
+ in the documentation and/or other materials provided with the
+ distribution.
+-   Neither the name of Google Inc. nor the names of its
++   Neither the name of Google LLC nor the names of its
+ contributors may be used to endorse or promote products derived from
+ this software without specific prior written permission.
+ 
+diff --git a/linux_syscall_support.h b/linux_syscall_support.h
+index 99a4b444918dc00de246205ad119c7461ffa4de0..c9ae154fc35018307333985defd3120f2a7f2947 100644
+--- a/linux_syscall_support.h
++++ b/linux_syscall_support.h
+@@ -1,5 +1,4 @@
+-/* Copyright (c) 2005-2011, Google Inc.
+- * All rights reserved.
++/* Copyright 2005-2011 Google LLC
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are
+@@ -11,7 +10,7 @@
+  * copyright notice, this list of conditions and the following disclaimer
+  * in the documentation and/or other materials provided with the
+  * distribution.
+- *     * Neither the name of Google Inc. nor the names of its
++ *     * Neither the name of Google LLC nor the names of its
+  * contributors may be used to endorse or promote products derived from
+  * this software without specific prior written permission.
+  *
+diff --git a/tests/Makefile b/tests/Makefile
+index 554813d8bb6950402e90df0de34a5fefdc58eea3..a4e2f387399adb46bf2f32371a87c74e32ab0d3b 100644
+--- a/tests/Makefile
++++ b/tests/Makefile
+@@ -1,4 +1,4 @@
+-# Copyright 2018, Google Inc.  All rights reserved.
++# Copyright 2018 Google LLC
+ #
+ # Redistribution and use in source and binary forms, with or without
+ # modification, are permitted provided that the following conditions are
+@@ -10,7 +10,7 @@
+ # copyright notice, this list of conditions and the following disclaimer
+ # in the documentation and/or other materials provided with the
+ # distribution.
+-#     * Neither the name of Google Inc. nor the names of its
++#     * Neither the name of Google LLC nor the names of its
+ # contributors may be used to endorse or promote products derived from
+ # this software without specific prior written permission.
+ #
+diff --git a/tests/fallocate.c b/tests/fallocate.c
+index f6589070f7f057c6f8e3d26d7aea7f5910e23639..1a26fed55a4a023f869c00f5d0413c19d2c6e5ad 100644
+--- a/tests/fallocate.c
++++ b/tests/fallocate.c
+@@ -1,4 +1,4 @@
+-/* Copyright 2019, Google Inc.  All rights reserved.
++/* Copyright 2019 Google LLC
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are
+@@ -10,7 +10,7 @@
+  * copyright notice, this list of conditions and the following disclaimer
+  * in the documentation and/or other materials provided with the
+  * distribution.
+- *     * Neither the name of Google Inc. nor the names of its
++ *     * Neither the name of Google LLC nor the names of its
+  * contributors may be used to endorse or promote products derived from
+  * this software without specific prior written permission.
+  *
+diff --git a/tests/getitimer.c b/tests/getitimer.c
+index 507948fea0899260f7d6017ba62577cb76054e91..8a8470021e69f9988f844506be3ef5e9970f14d4 100644
+--- a/tests/getitimer.c
++++ b/tests/getitimer.c
+@@ -1,4 +1,4 @@
+-/* Copyright 2022, Google Inc.  All rights reserved.
++/* Copyright 2022 Google LLC
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are
+@@ -10,7 +10,7 @@
+  * copyright notice, this list of conditions and the following disclaimer
+  * in the documentation and/or other materials provided with the
+  * distribution.
+- *     * Neither the name of Google Inc. nor the names of its
++ *     * Neither the name of Google LLC nor the names of its
+  * contributors may be used to endorse or promote products derived from
+  * this software without specific prior written permission.
+  *
+diff --git a/tests/getrandom.c b/tests/getrandom.c
+index eb1f162284133ed684608a51288ad5a46668ca4c..0ec38b3c9779437ca5ab6d556c34fd9dcf8d1985 100644
+--- a/tests/getrandom.c
++++ b/tests/getrandom.c
+@@ -1,4 +1,4 @@
+-/* Copyright 2020, Google Inc.  All rights reserved.
++/* Copyright 2020 Google LLC
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are
+@@ -10,7 +10,7 @@
+  * copyright notice, this list of conditions and the following disclaimer
+  * in the documentation and/or other materials provided with the
+  * distribution.
+- *     * Neither the name of Google Inc. nor the names of its
++ *     * Neither the name of Google LLC nor the names of its
+  * contributors may be used to endorse or promote products derived from
+  * this software without specific prior written permission.
+  *
+diff --git a/tests/lstat.c b/tests/lstat.c
+index 33848a9817fec3ba92c955f8bba59ba0d09bde00..816ba9faab7ccfb76208c8b891595927e336f4bd 100644
+--- a/tests/lstat.c
++++ b/tests/lstat.c
+@@ -1,4 +1,4 @@
+-/* Copyright 2021, Google Inc.  All rights reserved.
++/* Copyright 2021 Google LLC
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are
+@@ -10,7 +10,7 @@
+  * copyright notice, this list of conditions and the following disclaimer
+  * in the documentation and/or other materials provided with the
+  * distribution.
+- *     * Neither the name of Google Inc. nor the names of its
++ *     * Neither the name of Google LLC nor the names of its
+  * contributors may be used to endorse or promote products derived from
+  * this software without specific prior written permission.
+  *
+diff --git a/tests/setitimer.c b/tests/setitimer.c
+index 1bd71141de12e414e25c591d9dd9ef22e7609109..dd2ccfe5c3988174c1538c06be75128c59a8ccdd 100644
+--- a/tests/setitimer.c
++++ b/tests/setitimer.c
+@@ -1,4 +1,4 @@
+-/* Copyright 2022, Google Inc.  All rights reserved.
++/* Copyright 2022 Google LLC
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are
+@@ -10,7 +10,7 @@
+  * copyright notice, this list of conditions and the following disclaimer
+  * in the documentation and/or other materials provided with the
+  * distribution.
+- *     * Neither the name of Google Inc. nor the names of its
++ *     * Neither the name of Google LLC nor the names of its
+  * contributors may be used to endorse or promote products derived from
+  * this software without specific prior written permission.
+  *
+diff --git a/tests/sigaction.c b/tests/sigaction.c
+index f247aca7c87bbc05989abee10abfd4b913202c03..db3658f40fa27c233cb83ae5c1fc25c2181fa267 100644
+--- a/tests/sigaction.c
++++ b/tests/sigaction.c
+@@ -1,4 +1,4 @@
+-/* Copyright 2020, Google Inc.  All rights reserved.
++/* Copyright 2020 Google LLC
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are
+@@ -10,7 +10,7 @@
+  * copyright notice, this list of conditions and the following disclaimer
+  * in the documentation and/or other materials provided with the
+  * distribution.
+- *     * Neither the name of Google Inc. nor the names of its
++ *     * Neither the name of Google LLC nor the names of its
+  * contributors may be used to endorse or promote products derived from
+  * this software without specific prior written permission.
+  *
+diff --git a/tests/sigtimedwait.c b/tests/sigtimedwait.c
+index ee2f740fe4e4a672f210ab829b57e2a6c221c148..d56d304608af53c650f2e43ad889ebe259f0562d 100644
+--- a/tests/sigtimedwait.c
++++ b/tests/sigtimedwait.c
+@@ -1,4 +1,4 @@
+-/* Copyright 2019, Google Inc.  All rights reserved.
++/* Copyright 2019 Google LLC
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are
+@@ -10,7 +10,7 @@
+  * copyright notice, this list of conditions and the following disclaimer
+  * in the documentation and/or other materials provided with the
+  * distribution.
+- *     * Neither the name of Google Inc. nor the names of its
++ *     * Neither the name of Google LLC nor the names of its
+  * contributors may be used to endorse or promote products derived from
+  * this software without specific prior written permission.
+  *
+diff --git a/tests/stat.c b/tests/stat.c
+index 48cac620cbcd06e45d7127a80a3470f7d18d4a76..5ae66852ddcea1a4898c0d112812b3b8c5ecde4d 100644
+--- a/tests/stat.c
++++ b/tests/stat.c
+@@ -1,4 +1,4 @@
+-/* Copyright 2021, Google Inc.  All rights reserved.
++/* Copyright 2021 Google LLC
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are
+@@ -10,7 +10,7 @@
+  * copyright notice, this list of conditions and the following disclaimer
+  * in the documentation and/or other materials provided with the
+  * distribution.
+- *     * Neither the name of Google Inc. nor the names of its
++ *     * Neither the name of Google LLC nor the names of its
+  * contributors may be used to endorse or promote products derived from
+  * this software without specific prior written permission.
+  *
+diff --git a/tests/test_skel.h b/tests/test_skel.h
+index 024906cc9b55817ccb1ee60f74a16e3bba9c9c76..89077c95dfba1e4f22e9aa6664de9f33425a8bae 100644
+--- a/tests/test_skel.h
++++ b/tests/test_skel.h
+@@ -1,4 +1,4 @@
+-/* Copyright 2018, Google Inc.  All rights reserved.
++/* Copyright 2018 Google LLC
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are
+@@ -10,7 +10,7 @@
+  * copyright notice, this list of conditions and the following disclaimer
+  * in the documentation and/or other materials provided with the
+  * distribution.
+- *     * Neither the name of Google Inc. nor the names of its
++ *     * Neither the name of Google LLC nor the names of its
+  * contributors may be used to endorse or promote products derived from
+  * this software without specific prior written permission.
+  *
+diff --git a/tests/unlink.c b/tests/unlink.c
+index 70c8bc9a5e5c0a85c655784f32df88e91cec77e8..191e36792006452ce45db41177d07031a434abe4 100644
+--- a/tests/unlink.c
++++ b/tests/unlink.c
+@@ -1,4 +1,4 @@
+-/* Copyright 2018, Google Inc.  All rights reserved.
++/* Copyright 2018 Google LLC
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are
+@@ -10,7 +10,7 @@
+  * copyright notice, this list of conditions and the following disclaimer
+  * in the documentation and/or other materials provided with the
+  * distribution.
+- *     * Neither the name of Google Inc. nor the names of its
++ *     * Neither the name of Google LLC nor the names of its
+  * contributors may be used to endorse or promote products derived from
+  * this software without specific prior written permission.
+  *
