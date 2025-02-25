@@ -1,0 +1,114 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: yuanhecai <yuanhecai@loongson.cn>
+Date: Tue, 12 Sep 2023 10:30:38 +0800
+Subject: loongarch: Fix bugs from vp8_sixtap_predict4x4/16x16_lsx
+
+Bug: webm:1755
+
+Change-Id: I7295e0f9a1551b8a418d5b65a2b7351df1fdc063
+
+diff --git a/test/predict_test.cc b/test/predict_test.cc
+index fbf42077b31da9a67e63ffafa27f778014fb6b51..474eab2cb57a87fa1a549177a3d3e49d19450dbb 100644
+--- a/test/predict_test.cc
++++ b/test/predict_test.cc
+@@ -350,6 +350,14 @@ INSTANTIATE_TEST_SUITE_P(
+                       make_tuple(4, 4, &vp8_sixtap_predict4x4_mmi)));
+ #endif
+ 
++#if HAVE_LSX
++INSTANTIATE_TEST_SUITE_P(
++    LSX, SixtapPredictTest,
++    ::testing::Values(make_tuple(16, 16, &vp8_sixtap_predict16x16_lsx),
++                      make_tuple(8, 8, &vp8_sixtap_predict8x8_lsx),
++                      make_tuple(4, 4, &vp8_sixtap_predict4x4_lsx)));
++#endif
++
+ class BilinearPredictTest : public PredictTestBase {};
+ 
+ TEST_P(BilinearPredictTest, TestWithRandomData) {
+diff --git a/test/test_intra_pred_speed.cc b/test/test_intra_pred_speed.cc
+index 15303816b94859ab48f4d9cee608ef7e4d16afad..b013e0bd5d2dfb654756b557848b060d21d5aafc 100644
+--- a/test/test_intra_pred_speed.cc
++++ b/test/test_intra_pred_speed.cc
+@@ -348,6 +348,15 @@ INTRA_PRED_TEST(VSX, TestIntraPred32, vpx_dc_predictor_32x32_vsx,
+                 vpx_tm_predictor_32x32_vsx)
+ #endif  // HAVE_VSX
+ 
++#if HAVE_LSX
++INTRA_PRED_TEST(LSX, TestIntraPred8, vpx_dc_predictor_8x8_lsx, nullptr, nullptr,
++                nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
++                nullptr, nullptr, nullptr)
++INTRA_PRED_TEST(LSX, TestIntraPred16, vpx_dc_predictor_16x16_lsx, nullptr,
++                nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
++                nullptr, nullptr, nullptr, nullptr)
++#endif  // HAVE_LSX
++
+ // -----------------------------------------------------------------------------
+ 
+ #if CONFIG_VP9_HIGHBITDEPTH
+diff --git a/test/vp9_intrapred_test.cc b/test/vp9_intrapred_test.cc
+index daaf768699d2183bc51ab0ac0e60eef8e593a92c..c69d43efbc54515de3d70e721b4f4add38d42503 100644
+--- a/test/vp9_intrapred_test.cc
++++ b/test/vp9_intrapred_test.cc
+@@ -489,6 +489,15 @@ INSTANTIATE_TEST_SUITE_P(
+                                      &vpx_v_predictor_32x32_c, 32, 8)));
+ #endif  // HAVE_VSX
+ 
++#if HAVE_LSX
++INSTANTIATE_TEST_SUITE_P(
++    LSX, VP9IntraPredTest,
++    ::testing::Values(IntraPredParam(&vpx_dc_predictor_8x8_lsx,
++                                     &vpx_dc_predictor_8x8_c, 8, 8),
++                      IntraPredParam(&vpx_dc_predictor_16x16_lsx,
++                                     &vpx_dc_predictor_16x16_c, 16, 8)));
++#endif  // HAVE_LSX
++
+ #if CONFIG_VP9_HIGHBITDEPTH
+ typedef void (*HighbdIntraPred)(uint16_t *dst, ptrdiff_t stride,
+                                 const uint16_t *above, const uint16_t *left,
+diff --git a/vp8/common/loongarch/sixtap_filter_lsx.c b/vp8/common/loongarch/sixtap_filter_lsx.c
+index cd7ba547467e58112609562d273c321bba61bae2..986763341521307385e3268b58f0655a5bbbd8f4 100644
+--- a/vp8/common/loongarch/sixtap_filter_lsx.c
++++ b/vp8/common/loongarch/sixtap_filter_lsx.c
+@@ -1706,21 +1706,22 @@ void vp8_sixtap_predict4x4_lsx(uint8_t *RESTRICT src, int32_t src_stride,
+       switch (xoffset) {
+         case 0: {
+           __m128i tp0;
+-          tp0 = __lsx_vinsgr2vr_w(tp0, src, 0);
+-          src += src_stride;
+-          tp0 = __lsx_vinsgr2vr_w(tp0, src, 0);
+-          src += src_stride;
+-          tp0 = __lsx_vinsgr2vr_w(tp0, src, 0);
+-          src += src_stride;
+-          tp0 = __lsx_vinsgr2vr_w(tp0, src, 0);
+ 
++          tp0 = __lsx_vldrepl_w(src, 0);
++          src += src_stride;
+           __lsx_vstelm_w(tp0, dst, 0, 0);
+           dst += dst_stride;
+-          __lsx_vstelm_w(tp0, dst, 0, 1);
++          tp0 = __lsx_vldrepl_w(src, 0);
++          src += src_stride;
++          __lsx_vstelm_w(tp0, dst, 0, 0);
+           dst += dst_stride;
+-          __lsx_vstelm_w(tp0, dst, 0, 2);
++          tp0 = __lsx_vldrepl_w(src, 0);
++          src += src_stride;
++          __lsx_vstelm_w(tp0, dst, 0, 0);
+           dst += dst_stride;
+-          __lsx_vstelm_w(tp0, dst, 0, 3);
++          tp0 = __lsx_vldrepl_w(src, 0);
++          __lsx_vstelm_w(tp0, dst, 0, 0);
++
+           break;
+         }
+         case 2:
+@@ -1865,7 +1866,7 @@ void vp8_sixtap_predict16x16_lsx(uint8_t *RESTRICT src, int32_t src_stride,
+ 
+               case 1:
+                 Predict16x16Funcs1[3](src, src_stride, dst, dst_stride,
+-                                      h_filter, v_filter + 1, 16);
++                                      h_filter + 1, v_filter + 1, 16);
+                 break;
+             }
+             break;
