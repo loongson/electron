@@ -1,0 +1,21 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Thu, 13 Jun 2024 16:51:56 +0800
+Subject: boringssl add support for loongarch64
+
+add loongarch64 build configuration
+
+diff --git a/include/openssl/target.h b/include/openssl/target.h
+index 12736416f36556522d658b1a737db1c7257c171f..badc8c8e6b1d5d28623da712ae3b22784f39f75a 100644
+--- a/include/openssl/target.h
++++ b/include/openssl/target.h
+@@ -54,6 +54,9 @@
+ #define OPENSSL_32_BIT
+ #elif defined(__myriad2__)
+ #define OPENSSL_32_BIT
++#elif defined(__loongarch_lp64)
++#define OPENSSL_64_BIT
++#define OPENSSL_LOONG64
+ #else
+ // Note BoringSSL only supports standard 32-bit and 64-bit two's-complement,
+ // little-endian architectures. Functions will not produce the correct answer
