@@ -1,0 +1,21 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: zhoumingtao <zhoumingtao@loongson.cn>
+Date: Wed, 19 Feb 2025 02:07:25 +0000
+Subject: fix loongarch64 build
+
+remove clang::musttail
+
+diff --git a/src/core/SkRasterPipeline.h b/src/core/SkRasterPipeline.h
+index 1ed40dc8ef50af88e705ae46fbeb5805ffef6c76..1fc58c4a3dcd663910baa50a5366f01c3c9f11fc 100644
+--- a/src/core/SkRasterPipeline.h
++++ b/src/core/SkRasterPipeline.h
+@@ -26,7 +26,8 @@ enum SkColorType : int;
+ struct SkImageInfo;
+ struct skcms_TransferFunction;
+ 
+-#if __has_cpp_attribute(clang::musttail) && !defined(__EMSCRIPTEN__) && !defined(SK_CPU_ARM32)
++#if __has_cpp_attribute(clang::musttail) && !defined(__EMSCRIPTEN__) && !defined(SK_CPU_ARM32) && \
++    !defined(__loongarch__) && !defined(__mips__)
+     #define SK_HAS_MUSTTAIL 1
+ #else
+     #define SK_HAS_MUSTTAIL 0
