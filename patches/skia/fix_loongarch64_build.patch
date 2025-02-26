@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: zhoumingtao <zhoumingtao@loongson.cn>
+Date: Wed, 19 Feb 2025 02:07:25 +0000
+Subject: fix loongarch64 build
+
+remove clang::musttail
+
+diff --git a/modules/skcms/src/skcms_internals.h b/modules/skcms/src/skcms_internals.h
+index 3871ea35a3ee0862027056e07c1df5aaae5f65a8..95e674ac0be9f7f6e29733f6fae08d0f2922100b 100644
+--- a/modules/skcms/src/skcms_internals.h
++++ b/modules/skcms/src/skcms_internals.h
+@@ -45,6 +45,7 @@ extern "C" {
+                                                  && !__has_feature(address_sanitizer) \
+                                                  && !defined(__EMSCRIPTEN__) \
+                                                  && !defined(__arm__) \
++                                                 && !defined(__loongarch__) \
+                                                  && !defined(__riscv) \
+                                                  && !defined(_WIN32) && !defined(__SYMBIAN32__)
+             #define SKCMS_HAS_MUSTTAIL 1
+diff --git a/src/core/SkRasterPipeline.h b/src/core/SkRasterPipeline.h
+index 077b312f2b8f43af0f89b5b9257bfe2f5538ea90..b306ae5c52b9bec33ac979e2967687b2ba25f3aa 100644
+--- a/src/core/SkRasterPipeline.h
++++ b/src/core/SkRasterPipeline.h
+@@ -26,7 +26,8 @@ enum SkColorType : int;
+ struct SkImageInfo;
+ struct skcms_TransferFunction;
+ 
+-#if __has_cpp_attribute(clang::musttail) && !defined(__EMSCRIPTEN__) && !defined(SK_CPU_ARM32)
++#if __has_cpp_attribute(clang::musttail) && !defined(__EMSCRIPTEN__) && !defined(SK_CPU_ARM32) && \
++    !defined(__loongarch__) && !defined(__mips__)
+     #define SK_HAS_MUSTTAIL 1
+ #else
+     #define SK_HAS_MUSTTAIL 0
