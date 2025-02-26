@@ -1,0 +1,40 @@
+import("all.gn")
+is_component_build = false
+
+is_official_build = false
+
+# This may be guarded behind is_chrome_branded alongside
+# proprietary_codecs https://webrtc-review.googlesource.com/c/src/+/36321,
+# explicitly override here to build OpenH264 encoder/FFmpeg decoder.
+# The initialization of the decoder depends on whether ffmpeg has
+# been built with H.264 support.
+rtc_use_h264 = proprietary_codecs
+
+# By default, Electron builds ffmpeg with proprietary codecs enabled. In order
+# to facilitate users who don't want to ship proprietary codecs in ffmpeg, or
+# who have an LGPL requirement to ship ffmpeg as a dynamically linked library,
+# we build ffmpeg as a shared library.
+is_component_ffmpeg = true
+
+# Build args for loong64
+is_debug = false
+use_gold = false
+is_clang = true
+use_lld = true
+use_sysroot = true
+
+enable_widevine = false
+fatal_linker_warnings = false
+clang_use_chrome_plugins = false
+proprietary_codecs = true
+treat_warnings_as_errors = false
+rtc_use_pipewire = false
+dcheck_always_on = false
+disable_fieldtrial_testing_config = true
+enable_rust = true
+
+v8_enable_pointer_compression = true
+v8_enable_pointer_compression_shared_cage = true
+
+target_cpu = "loong64"
+v8_target_cpu = "loong64"
