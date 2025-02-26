@@ -157,3 +157,10 @@ cherry-pick-38e4483e47f9.patch
 cherry-pick-1b9040817119.patch
 cherry-pick-99cafbf4b4b9.patch
 cherry-pick-44b7fbf35b10.patch
+add_loongarch64_architecture_support.patch
+chromium_add_support_for_loongarch64.patch
+chromium_build_configuration_adds_loongarch64_support.patch
+fix_undeclared_identifier_nr_getdents.patch
+support_loongarch64_build.patch
+crashpad_add_support_for_loongarch64.patch
+fix_electron-v29_build.patch
