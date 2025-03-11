@@ -68,7 +68,7 @@ index dad9598799a670b3cfb14965bc8a7b4ea3b4f95f..05a82788ae1e5c304ee150a2390f346d
          last_time_animation_was_detected_ = event_time;
        } else {
 @@ -198,8 +211,9 @@ bool VideoCaptureOracle::ObserveEventAndDecideCapture(
-       NOTREACHED();
+       break;
    }
  
 -  if (!should_sample)
