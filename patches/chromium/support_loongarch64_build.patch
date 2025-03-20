@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Thu, 14 Dec 2023 03:16:36 +0000
+Subject: support loongarch64 build
+
+using llvm 18 from https://github.com/llvm/llvm-project
+
+diff --git a/sandbox/linux/syscall_broker/broker_client.cc b/sandbox/linux/syscall_broker/broker_client.cc
+index 674095fbda6d0726ef69a80011e2edb6b498c09f..573b62917c050a1f26ae20f64d681448842a434c 100644
+--- a/sandbox/linux/syscall_broker/broker_client.cc
++++ b/sandbox/linux/syscall_broker/broker_client.cc
+@@ -205,9 +205,9 @@ int BrokerClient::Statx(const char* pathname,
+     return -EFAULT;
+ 
+   if (fast_check_in_client_ &&
+-      !CommandStatIsSafe(policy_.allowed_command_set, *policy_.file_permissions,
+-                         pathname, nullptr)) {
+-    return -policy_.file_permissions->denied_errno();
++      !CommandStatIsSafe(policy_->allowed_command_set, *policy_->file_permissions,
++                         pathname)) {
++    return -policy_->file_permissions->denied_errno();
+   }
+   return StatFamilySyscall(COMMAND_STATX, pathname, follow_links, sb,
+                            sizeof(*sb));
+diff --git a/third_party/closure_compiler/compiler.py b/third_party/closure_compiler/compiler.py
+index c6368af73374924eb440f5314972d495312bee9b..4314f8e32086797789c2e8e4a43773f57515792f 100755
+--- a/third_party/closure_compiler/compiler.py
++++ b/third_party/closure_compiler/compiler.py
+@@ -13,8 +13,9 @@ import subprocess
+ 
+ 
+ _CURRENT_DIR = os.path.join(os.path.dirname(__file__))
+-_JAVA_PATH = os.path.join(_CURRENT_DIR, "..", "jdk", "current", "bin", "java")
+-assert os.path.isfile(_JAVA_PATH), "java only allowed in android builds"
++_JAVA_BIN = "java"
++_JDK_PATH = os.path.join(_CURRENT_DIR, "..", "jdk", "current", "bin", _JAVA_BIN)
++_JAVA_PATH = _JDK_PATH if os.path.isfile(_JDK_PATH) else _JAVA_BIN
+ 
+ class Compiler(object):
+   """Runs the Closure compiler on given source files to typecheck them

@@ -1,0 +1,86 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Thu, 23 Feb 2023 12:08:27 +0000
+Subject: Chromium add support for loongarch64
+
+
+diff --git a/chrome/browser/extensions/api/runtime/chrome_runtime_api_delegate.cc b/chrome/browser/extensions/api/runtime/chrome_runtime_api_delegate.cc
+index 0c2f88ce0d92c31f84518e41dbaab5ddf0bccf96..66889af565e9fcafc578552aafb2baeb636e9ddd 100644
+--- a/chrome/browser/extensions/api/runtime/chrome_runtime_api_delegate.cc
++++ b/chrome/browser/extensions/api/runtime/chrome_runtime_api_delegate.cc
+@@ -303,6 +303,8 @@ bool ChromeRuntimeAPIDelegate::GetPlatformInfo(PlatformInfo* info) {
+     info->arch = extensions::api::runtime::PlatformArch::kMips;
+   } else if (strcmp(arch, "mips64el") == 0) {
+     info->arch = extensions::api::runtime::PlatformArch::kMips64;
++  } else if (strcmp(arch, "loongarch64") == 0) {
++    info->arch = extensions::api::runtime::PlatformArch::kLoong64;
+   } else {
+     NOTREACHED_IN_MIGRATION();
+     return false;
+@@ -319,6 +321,8 @@ bool ChromeRuntimeAPIDelegate::GetPlatformInfo(PlatformInfo* info) {
+     info->nacl_arch = extensions::api::runtime::PlatformNaclArch::kMips;
+   } else if (strcmp(nacl_arch, "mips64") == 0) {
+     info->nacl_arch = extensions::api::runtime::PlatformNaclArch::kMips64;
++  } else if (strcmp(nacl_arch, "loongarch64") == 0) {
++    info->nacl_arch = extensions::api::runtime::PlatformNaclArch::kLoong64;
+   } else {
+     NOTREACHED_IN_MIGRATION();
+     return false;
+diff --git a/chrome/installer/linux/debian/calculate_package_deps.py b/chrome/installer/linux/debian/calculate_package_deps.py
+index 8a8b29418bb6a2f39ca497554e1f962599aea062..8569789cd00ca745580d8a3dc7e1925585792588 100755
+--- a/chrome/installer/linux/debian/calculate_package_deps.py
++++ b/chrome/installer/linux/debian/calculate_package_deps.py
+@@ -53,6 +53,9 @@ elif arch == 'mipsel':
+ elif arch == 'mips64el':
+   cmd.extend(['-l%s/usr/lib/mips64el-linux-gnuabi64' % sysroot,
+               '-l%s/lib/mips64el-linux-gnuabi64' % sysroot])
++elif arch == 'loong64':
++  cmd.extend(['-l%s/usr/lib/loongarch64-linux-gnu' % sysroot,
++              '-l%s/lib/loongarch64-linux-gnu' % sysroot])
+ else:
+   print('Unsupported architecture ' + arch)
+   sys.exit(1)
+diff --git a/extensions/common/api/runtime.json b/extensions/common/api/runtime.json
+index 58034dfdd2516d8d54e5a9c7a0ade0f37d237cab..8ef6343b3fd4fdb8aa95971fbb3c2dfa9850c1da 100644
+--- a/extensions/common/api/runtime.json
++++ b/extensions/common/api/runtime.json
+@@ -99,6 +99,7 @@
+             {"name": "x86-64", "description": "Specifies the processer architecture as x86-64."},
+             {"name": "mips", "description": "Specifies the processer architecture as mips."},
+             {"name": "mips64", "description": "Specifies the processer architecture as mips64."}
++            {"name": "loong64", "description": "Specifies the processer architecture as loong64."}
+          ],
+         "description": "The machine's processor architecture."
+       },
+@@ -112,6 +113,7 @@
+           {"name": "x86-64", "description": "Specifies the native client architecture as x86-64."},
+           {"name": "mips", "description": "Specifies the native client architecture as mips."},
+           {"name": "mips64", "description": "Specifies the native client architecture as mips64."}
++          {"name": "loong64", "description": "Specifies the native client architecture as loong64."}
+         ]
+       },
+       {
+diff --git a/third_party/protobuf/src/google/protobuf/port_def.inc b/third_party/protobuf/src/google/protobuf/port_def.inc
+index f1c46c2a1b2845650d54bf42cd0fdd54efef21a4..6190222fde73c6bd4fb408cac0b3d840bc0718e2 100644
+--- a/third_party/protobuf/src/google/protobuf/port_def.inc
++++ b/third_party/protobuf/src/google/protobuf/port_def.inc
+@@ -257,7 +257,7 @@
+ #if __has_cpp_attribute(clang::musttail) && !defined(__arm__) && \
+     !defined(_ARCH_PPC) && !defined(__wasm__) &&                 \
+     !(defined(_MSC_VER) && defined(_M_IX86)) &&                  \
+-    !(defined(__NDK_MAJOR__) && __NDK_MAJOR__ <= 24)
++    !(defined(__NDK_MAJOR__) && __NDK_MAJOR__ <= 24) && !defined(__loongarch__)
+ #  ifndef PROTO2_OPENSOURCE
+ // Compilation fails on ARM32: b/195943306
+ // Compilation fails on powerpc64le: b/187985113
+diff --git a/ui/gl/features.gni b/ui/gl/features.gni
+index 245959e9080194ce5aff85fe90735d8f2974c27e..8b0bf31ad756a3e2ab9145a346fa5a59d215fd5d 100644
+--- a/ui/gl/features.gni
++++ b/ui/gl/features.gni
+@@ -30,5 +30,5 @@ declare_args() {
+        is_fuchsia) &&
+       (target_cpu == "x86" || target_cpu == "x64" || target_cpu == "arm" ||
+        target_cpu == "arm64" || target_cpu == "mipsel" ||
+-       target_cpu == "mips64el" || target_cpu == "riscv64")
++       target_cpu == "mips64el" || target_cpu == "riscv64" || target_cpu == "loong64")
+ }

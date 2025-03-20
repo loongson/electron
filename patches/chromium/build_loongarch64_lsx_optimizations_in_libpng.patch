@@ -1,0 +1,59 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Kexy=20Biscuit=20=28=E8=A2=AB=E5=AD=90=E9=A5=BC=29?=
+ <kexybiscuit@aosc.io>
+Date: Thu, 8 Aug 2024 01:12:56 +0000
+Subject: Build LoongArch64 LSX optimizations in libpng
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+These files were added in Chromium Change Number 5454197, but not referenced in BUILD.gn.
+
+Update BUILD.gn to compile them when appropriate.
+
+Bug: 356038456
+Change-Id: I2d15071261a3785184c5fa7c26ea26b182d4ba6c
+Reviewed-on: https://chromium-review.googlesource.com/c/chromium/src/+/5740787
+Reviewed-by: Rick Byers <rbyers@chromium.org>
+Commit-Queue: Rick Byers <rbyers@chromium.org>
+Auto-Submit: Kexy Biscuit (百合ヶ咲るる / 被子饼) <kexybiscuit@gmail.com>
+Reviewed-by: Leon Scroggins <scroggo@google.com>
+Cr-Commit-Position: refs/heads/main@{#1338820}
+
+diff --git a/AUTHORS b/AUTHORS
+index ad27653d700ff2f0c99a5b577fed954a79051d07..529418bf08ce88543c7007a98bcea40066b1dbc2 100644
+--- a/AUTHORS
++++ b/AUTHORS
+@@ -786,6 +786,8 @@ Ketan Goyal <ketan.goyal@samsung.com>
+ Kevin Gibbons <bakkot@gmail.com>
+ Kevin Lee Helpingstine <sig11@reprehensible.net>
+ Kevin M. McCormick <mckev@amazon.com>
++Kexy Biscuit <kexybiscuit@aosc.io>
++Kexy Biscuit <kexybiscuit@gmail.com>
+ Keyou <qqkillyou@gmail.com>
+ Khasim Syed Mohammed <khasim.mohammed@linaro.org>
+ Khem Raj <raj.khem@gmail.com>
+diff --git a/third_party/libpng/BUILD.gn b/third_party/libpng/BUILD.gn
+index 81648e3b2a810d8a88a0da3f63052875eef330fc..3116ea0e77e8df31e75aca2e9aa29884e597ea02 100644
+--- a/third_party/libpng/BUILD.gn
++++ b/third_party/libpng/BUILD.gn
+@@ -4,6 +4,7 @@
+ 
+ import("//build/config/arm.gni")
+ import("//build/config/mips.gni")
++import("//build/config/loongarch64.gni")
+ 
+ if (build_with_chromium) {
+   import("//testing/libfuzzer/fuzzer_test.gni")
+@@ -91,6 +92,11 @@ source_set("libpng_sources") {
+       "mips/filter_msa_intrinsics.c",
+       "mips/mips_init.c",
+     ]
++  } else if (current_cpu == "loong64" && loongarch64_use_lsx) {
++    sources += [
++      "loongarch/filter_lsx_intrinsics.c",
++      "loongarch/loongarch_lsx_init.c",
++    ]
+   }
+ 
+   configs -= [ "//build/config/compiler:chromium_code" ]
