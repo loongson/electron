@@ -1,0 +1,144 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Thu, 23 Feb 2023 12:09:16 +0000
+Subject: Chromium build configuration adds loongarch64 support
+
+
+diff --git a/build/config/sysroot.gni b/build/config/sysroot.gni
+index 47fe4cbc840ddc1e863770fdbe6582589ecb0c8b..bc301bc6c7b7b256ac742e3e3ef2d733923210ad 100644
+--- a/build/config/sysroot.gni
++++ b/build/config/sysroot.gni
+@@ -22,7 +22,8 @@ declare_args() {
+   use_sysroot =
+       current_cpu == "x86" || current_cpu == "x64" || current_cpu == "arm" ||
+       current_cpu == "arm64" || current_cpu == "mipsel" ||
+-      current_cpu == "mips64el" || (current_cpu == "riscv64" && is_android)
++      current_cpu == "mips64el" || (current_cpu == "riscv64" && is_android) ||
++      current_cpu == "loong64"
+ }
+ 
+ if (sysroot == "") {
+@@ -49,6 +50,8 @@ if (sysroot == "") {
+       sysroot = "$target_sysroot_dir/debian_bullseye_armhf-sysroot"
+     } else if (current_cpu == "arm64") {
+       sysroot = "$target_sysroot_dir/debian_bullseye_arm64-sysroot"
++    } else if (current_cpu == "loong64") {
++      sysroot = "$target_sysroot_dir/debian_bullseye_loong64-sysroot"
+     } else {
+       assert(false, "No linux sysroot for cpu: $target_cpu")
+     }
+diff --git a/build/linux/sysroot_scripts/install-sysroot.py b/build/linux/sysroot_scripts/install-sysroot.py
+index abd58136efc837191ac81c65bf84859741f9ad29..773dbbfab07bd05336d1bbe72866720b228e45d7 100755
+--- a/build/linux/sysroot_scripts/install-sysroot.py
++++ b/build/linux/sysroot_scripts/install-sysroot.py
+@@ -36,7 +36,7 @@ from urllib.request import urlopen
+ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(SCRIPT_DIR)))
+ 
+-VALID_ARCHS = ("amd64", "i386", "armhf", "arm64", "mipsel", "mips64el")
++VALID_ARCHS = ("amd64", "i386", "armhf", "arm64", "mipsel", "mips64el", 'loong64')
+ 
+ ARCH_TRANSLATIONS = {
+     "x64": "amd64",
+@@ -44,6 +44,7 @@ ARCH_TRANSLATIONS = {
+     "arm": "armhf",
+     "mips": "mipsel",
+     "mips64": "mips64el",
++    'loongarch64': 'loong64',
+ }
+ 
+ DEFAULT_SYSROOTS_PATH = os.path.join(os.path.relpath(SCRIPT_DIR, SRC_DIR),
+diff --git a/build/linux/sysroot_scripts/sysroots.json b/build/linux/sysroot_scripts/sysroots.json
+index f146ea68bc72dd0b3c096f65f1895d25b7331bdf..698f5c5b236063c47627f05e4438ad57a4c78077 100644
+--- a/build/linux/sysroot_scripts/sysroots.json
++++ b/build/linux/sysroot_scripts/sysroots.json
+@@ -29,6 +29,12 @@
+         "Tarball": "debian_bullseye_mips64el_sysroot.tar.xz",
+         "URL": "https://commondatastorage.googleapis.com/chrome-linux-sysroot"
+     },
++    "bullseye_loong64": {
++        "Sha256Sum": "783cb79f26736c69e8125788d95ffb65a28172349009d75188838a004280a92b",
++        "SysrootDir": "debian_bullseye_loong64-sysroot",
++        "Tarball": "debian_bullseye_loong64_sysroot.tar.xz",
++        "URL": "https://commondatastorage.googleapis.com/chrome-linux-sysroot"
++    },
+     "bullseye_mipsel": {
+         "Sha256Sum": "fcf8c3931476dd097c58f2f5d44621c7090b135e85ab56885aa4b44f4bd6cdb5",
+         "SysrootDir": "debian_bullseye_mipsel-sysroot",
+diff --git a/third_party/breakpad/BUILD.gn b/third_party/breakpad/BUILD.gn
+index 007fdff16e92e3baa3204815d0239be5d126f97e..318d4a36616ca8c15cd771c80129f51cdf8e168f 100644
+--- a/third_party/breakpad/BUILD.gn
++++ b/third_party/breakpad/BUILD.gn
+@@ -248,6 +248,8 @@ if (!is_win) {
+         "breakpad/src/processor/stackwalker_arm.h",
+         "breakpad/src/processor/stackwalker_arm64.cc",
+         "breakpad/src/processor/stackwalker_arm64.h",
++        "breakpad/src/processor/stackwalker_loongarch64.cc",
++        "breakpad/src/processor/stackwalker_loongarch64.h",
+         "breakpad/src/processor/stackwalker_mips.cc",
+         "breakpad/src/processor/stackwalker_mips.h",
+         "breakpad/src/processor/stackwalker_ppc.cc",
+diff --git a/third_party/dav1d/config/linux-noasm/generic/config.h b/third_party/dav1d/config/linux-noasm/generic/config.h
+index 306db598b2710ebef2fa70532548090dca65865c..126e6570eb10bfa88157e15156b64f5bfbfa1a58 100644
+--- a/third_party/dav1d/config/linux-noasm/generic/config.h
++++ b/third_party/dav1d/config/linux-noasm/generic/config.h
+@@ -5,6 +5,8 @@
+ 
+ #pragma once
+ 
++#define ARCH_LOONG64 1
++
+ #define ARCH_AARCH64 0
+ 
+ #define ARCH_ARM 0
+diff --git a/third_party/libvpx/BUILD.gn b/third_party/libvpx/BUILD.gn
+index 90cf3fe0c30558ccf8e6f161bb46b20477815276..bd15b3986ee032dd14b88468b213c611570a3723 100644
+--- a/third_party/libvpx/BUILD.gn
++++ b/third_party/libvpx/BUILD.gn
+@@ -42,7 +42,7 @@ if (current_cpu == "x86") {
+ } else if (current_cpu == "riscv64") {
+   cpu_arch_full = "generic"
+ } else if (current_cpu == "loong64") {
+-  cpu_arch_full = "loongarch"
++  cpu_arch_full = "generic"
+ } else {
+   cpu_arch_full = current_cpu
+ }
+@@ -305,16 +305,6 @@ if (current_cpu == "x86" || (current_cpu == "x64" && !is_msan)) {
+   }
+ }
+ 
+-if (current_cpu == "loong64") {
+-  source_set("libvpx_loongarch_lsx") {
+-    configs -= [ "//build/config/compiler:chromium_code" ]
+-    configs += [ "//build/config/compiler:no_chromium_code" ]
+-    configs += [ ":libvpx_config" ]
+-    cflags = [ "-mlsx" ]
+-    sources = libvpx_srcs_loongarch_lsx
+-  }
+-}
+-
+ if (current_cpu == "arm" || current_cpu == "arm64") {
+   source_set("libvpx_intrinsics_neon") {
+     check_includes = false
+@@ -574,8 +564,8 @@ static_library("libvpx") {
+     sources = libvpx_srcs_generic
+     public_deps = [ ":libvpx_generic_headers" ]
+   } else if (current_cpu == "loong64") {
+-    sources = libvpx_srcs_loongarch
+-    public_deps = [ ":libvpx_loongarch_headers" ]
++    sources = libvpx_srcs_generic
++    public_deps = [ ":libvpx_generic_headers" ]
+   }
+ 
+   configs -= [ "//build/config/compiler:chromium_code" ]
+@@ -614,9 +604,6 @@ static_library("libvpx") {
+   if (current_cpu == "arm" && arm_assembly_sources != []) {
+     deps += [ ":libvpx_assembly_arm" ]
+   }
+-  if (current_cpu == "loong64") {
+-    deps += [ ":libvpx_loongarch_lsx" ]
+-  }
+ 
+   public_configs = [ ":libvpx_public_config" ]
+ }

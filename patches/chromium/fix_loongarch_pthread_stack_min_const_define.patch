@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: zhoumingtao <zhoumingtao@loongson.cn>
+Date: Wed, 19 Mar 2025 08:10:24 +0000
+Subject: Fix LoongArch PTHREAD_STACK_MIN_CONST define
+
+
+diff --git a/base/process/launch.h b/base/process/launch.h
+index 009d75093c7804d5c65f6149881efa3ac06892d8..d570b93740cda13599009dea8d762c5a177e7d09 100644
+--- a/base/process/launch.h
++++ b/base/process/launch.h
+@@ -55,7 +55,7 @@ namespace base {
+ // defined as a constant.
+ 
+ // These constants are borrowed from glibc’s (arch)/bits/pthread_stack_min.h.
+-#if defined(ARCH_CPU_ARM64)
++#if defined(ARCH_CPU_ARM64) || defined(ARCH_CPU_LOONGARCH64)
+ #define PTHREAD_STACK_MIN_CONST \
+   (__builtin_constant_p(PTHREAD_STACK_MIN) ? PTHREAD_STACK_MIN : 131072)
+ #else

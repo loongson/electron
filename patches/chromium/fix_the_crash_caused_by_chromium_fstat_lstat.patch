@@ -1,0 +1,597 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: zhoumingtao <zhoumingtao@loongson.cn>
+Date: Wed, 19 Mar 2025 08:31:46 +0000
+Subject: fix the crash caused by chromium fstat/lstat
+
+0 0x555560b3eb78 base::debug::CollectStackTrace()
+1 0x555560b27e5c base::debug::StackTrace::StackTrace()
+2 0x555560b3e9ac base::debug::(anonymous namespace)::StackDumpSignalHandler()
+3 0x7ffffd5bc910 ([vdso]+0x90f)
+4 0x7ffff052a48c (/usr/lib/loongarch64-linux-gnu/libc.so.6+0xaa48b)
+5 0x55556332fcb0 sandbox::syscall_broker::BrokerFilePermission::CheckStatWithIntermediates()
+6 0x555563336360 sandbox::syscall_broker::BrokerPermissionList::GetFileNameIfAllowedToStat()
+7 0x5555633392fc sandbox::syscall_broker::BrokerClient::Statx()
+8 0x555563339988 sandbox::syscall_broker::BrokerClient::SIGSYS_Handler()
+9 0x55556334a9c4 sandbox::Trap::SigSys()
+10 0x7ffffd5bc910 ([vdso]+0x90f)
+11 0x7ffff056d280 fstatat
+12 0x555560b1ad68 base::File::Lstat()
+13 0x555560b380bc base::IsLink()
+14 0x555560b237dc base::(anonymous namespace)::FilePathWatcherImpl::UpdateWatches()
+15 0x555560b264e0 base::(anonymous namespace)::FilePathWatcherImpl::WatchWithChangeInfo()
+16 0x55555e6c6ab4 content::(anonymous namespace)::FilePathWatcherImpl::Watch()
+17 0x55555b161070 net::internal::DnsConfigServiceLinux::Watcher::Watch()
+18 0x55555b0fc5d4 net::DnsConfigService::WatchConfig()
+19 0x55555b16018c net::SystemDnsConfigChangeNotifier::Core::SetAndStartDnsConfigService()
+20 0x55555b15f268 base::internal::Invoker<>::RunOnce()
+21 0x555560ab7dc8 base::TaskAnnotator::RunTaskImpl()
+22 0x555560ae5b3c base::internal::TaskTracker::RunTaskImpl()
+23 0x555560ae5c08 base::internal::TaskTracker::RunSkipOnShutdown()
+24 0x555560ae5754 base::internal::TaskTracker::RunTask()
+25 0x555560ae508c base::internal::TaskTracker::RunAndPopNextTask()
+26 0x555560af9204 base::internal::WorkerThread::RunWorker()
+27 0x555560af8d58 base::internal::WorkerThread::RunPooledWorker()
+
+diff --git a/sandbox/linux/bpf_dsl/seccomp_macros.h b/sandbox/linux/bpf_dsl/seccomp_macros.h
+index 06323244838e199b7735d55469e59af4529a647d..6d9aa1800701984d52db0f14dee6346652b27bcc 100644
+--- a/sandbox/linux/bpf_dsl/seccomp_macros.h
++++ b/sandbox/linux/bpf_dsl/seccomp_macros.h
+@@ -347,7 +347,10 @@ struct regs_struct {
+ #elif defined(__loongarch_lp64)
+ struct regs_struct {
+   uint64_t regs[32];
+-  uint64_t pc;
++  uint64_t orig_a0;
++  uint64_t csr_era;
++  uint64_t csr_badv;
++  uint64_t reserved[10];
+ };
+ 
+ typedef unsigned long int greg_t;
+@@ -379,7 +382,7 @@ typedef unsigned long int greg_t;
+ 
+ #define SECCOMP_PT_RESULT(_regs) (_regs).regs[4]
+ #define SECCOMP_PT_SYSCALL(_regs) (_regs).regs[11]
+-#define SECCOMP_PT_IP(_regs) (_regs).pc
++#define SECCOMP_PT_IP(_regs) (_regs).csr_era
+ #define SECCOMP_PT_PARM1(_regs) (_regs).regs[4]
+ #define SECCOMP_PT_PARM2(_regs) (_regs).regs[5]
+ #define SECCOMP_PT_PARM3(_regs) (_regs).regs[6]
+diff --git a/sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.cc b/sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.cc
+index 725de63ad07d22feb4af160f90cb186210c72182..7ada12d8fd064c6433133409579f21c0f1added2 100644
+--- a/sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.cc
++++ b/sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.cc
+@@ -359,7 +359,6 @@ intptr_t SIGSYSSchedHandler(const struct arch_seccomp_data& args,
+ 
+ intptr_t SIGSYSFstatatHandler(const struct arch_seccomp_data& args,
+                               void* fs_denied_errno) {
+-#if !defined(__loongarch__)
+   if (args.nr == __NR_fstatat_default) {
+     if (*reinterpret_cast<const char*>(args.args[1]) == '\0' &&
+         args.args[3] == static_cast<uint64_t>(AT_EMPTY_PATH)) {
+@@ -368,7 +367,6 @@ intptr_t SIGSYSFstatatHandler(const struct arch_seccomp_data& args,
+     }
+     return -reinterpret_cast<intptr_t>(fs_denied_errno);
+   }
+-#endif
+ 
+   CrashSIGSYS_Handler(args, fs_denied_errno);
+ 
+@@ -377,6 +375,26 @@ intptr_t SIGSYSFstatatHandler(const struct arch_seccomp_data& args,
+   return -ENOSYS;
+ }
+ 
++#if defined(__NR_statx)
++intptr_t SIGSYSStatxHandler(const struct arch_seccomp_data& args,
++                            void* fs_denied_errno) {
++  if (args.nr == __NR_fstatat_default) {
++    if (*reinterpret_cast<const char*>(args.args[1]) == '\0' &&
++        args.args[2] == static_cast<uint64_t>(AT_EMPTY_PATH)) {
++      return syscall(__NR_fstat_default, static_cast<int>(args.args[0]),
++                    NULL, AT_EMPTY_PATH, STATX_ALL, reinterpret_cast<default_stat_struct*>(args.args[4]));
++    }
++    return -reinterpret_cast<intptr_t>(fs_denied_errno);
++  }
++
++  CrashSIGSYS_Handler(args, fs_denied_errno);
++
++  // Should never be reached.
++  RAW_CHECK(false);
++  return -ENOSYS;
++}
++#endif
++
+ bpf_dsl::ResultExpr CrashSIGSYS() {
+   return bpf_dsl::Trap(CrashSIGSYS_Handler, nullptr);
+ }
+@@ -422,6 +440,13 @@ bpf_dsl::ResultExpr RewriteFstatatSIGSYS(int fs_denied_errno) {
+                        reinterpret_cast<void*>(fs_denied_errno));
+ }
+ 
++#if defined(__NR_statx)
++bpf_dsl::ResultExpr RewriteStatxSIGSYS(int fs_denied_errno) {
++  return bpf_dsl::Trap(SIGSYSStatxHandler,
++                      reinterpret_cast<void*>(fs_denied_errno));
++}
++#endif
++
+ #if defined(__NR_socketcall)
+ bool CanRewriteSocketcall() {
+   static bool can_rewrite_socketcall = []() {
+diff --git a/sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.h b/sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.h
+index 5fca3fdaf67167159ac35430803ba2a9ce325529..60aeb8f4094c22fb8acec5d735e6ffbf89bf70a2 100644
+--- a/sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.h
++++ b/sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.h
+@@ -89,6 +89,12 @@ SANDBOX_EXPORT intptr_t
+ SIGSYSFstatatHandler(const struct arch_seccomp_data& args,
+                      void* fs_denied_errno);
+ 
++#if defined(__NR_statx)
++SANDBOX_EXPORT intptr_t
++SIGSYSStatxHandler(const struct arch_seccomp_data& args,
++                  void* fs_denied_errno);
++#endif
++
+ // Variants of the above functions for use with bpf_dsl.
+ SANDBOX_EXPORT bpf_dsl::ResultExpr CrashSIGSYS();
+ SANDBOX_EXPORT bpf_dsl::ResultExpr CrashSIGSYSClone();
+@@ -101,6 +107,9 @@ SANDBOX_EXPORT bpf_dsl::ResultExpr CrashSIGSYSSocket();
+ SANDBOX_EXPORT bpf_dsl::ResultExpr CrashSIGSYSSockopt();
+ SANDBOX_EXPORT bpf_dsl::ResultExpr RewriteSchedSIGSYS();
+ SANDBOX_EXPORT bpf_dsl::ResultExpr RewriteFstatatSIGSYS(int fs_denied_errno);
++#if defined(__NR_statx)
++SANDBOX_EXPORT bpf_dsl::ResultExpr RewriteStatxSIGSYS(int fs_denied_errno);
++#endif
+ 
+ #if defined(__NR_socketcall)
+ // True if the kernel supports direct socket-API syscalls like socket(2) and
+diff --git a/sandbox/linux/seccomp-bpf/syscall.cc b/sandbox/linux/seccomp-bpf/syscall.cc
+index 0dbd6452742ad77863628c53b70a09e1f551ded0..75b3c6ef3d4d84acf78d6b83e82097a2c4fea4a6 100644
+--- a/sandbox/linux/seccomp-bpf/syscall.cc
++++ b/sandbox/linux/seccomp-bpf/syscall.cc
+@@ -23,7 +23,7 @@ namespace sandbox {
+ namespace {
+ 
+ #if defined(ARCH_CPU_X86_FAMILY) || defined(ARCH_CPU_ARM_FAMILY) || \
+-    defined(ARCH_CPU_MIPS_FAMILY) || defined(ARCH_CPU_LOONG_FAMILY)
++    defined(ARCH_CPU_MIPS_FAMILY) || defined(ARCH_CPU_LOONGARCH_FAMILY)
+ // Number that's not currently used by any Linux kernel ABIs.
+ const int kInvalidSyscallNumber = 0x351d3;
+ #else
+@@ -315,22 +315,25 @@ asm(// We need to be able to tell the kernel exactly where we made a
+     ".size SyscallAsm, .-SyscallAsm\n"
+ #elif defined(__loongarch_lp64)
+     ".text\n"
+-    ".global SyscallAsm\n"
++    ".align 2\n"
+     ".type SyscallAsm, %function\n"
+     "SyscallAsm:\n"
++    ".cfi_startproc\n"
+     "bge $a0, $zero, 1f\n"
+-    "la.pcrel $a0, 2f\n"
++    "la.local $a0, 2f\n"
+     "b 2f\n"
+-    "1:ld.d $a5, $a6, 40\n"
++    "1:\n"
++    "ld.d $a5, $a6, 40\n"
+     "ld.d $a4, $a6, 32\n"
+     "ld.d $a3, $a6, 24\n"
+     "ld.d $a2, $a6, 16\n"
+     "ld.d $a1, $a6, 8\n"
+     "move $a7, $a0\n"
+     "ld.d $a0, $a6, 0\n"
+-    // Enter the kernel
+     "syscall 0\n"
+-    "2:jirl $zero, $ra, 0\n"
++    "2:\n"
++    "jirl $zero, $ra, 0\n"
++    ".cfi_endproc\n"
+     ".size SyscallAsm, .-SyscallAsm\n"
+ #endif
+     );  // asm
+@@ -455,9 +458,9 @@ intptr_t Syscall::Call(int nr,
+     register intptr_t inout __asm__("$r4") = nr;
+     register const intptr_t* data __asm__("$r10") = args;
+     asm volatile("bl SyscallAsm\n"
+-                 : "=r"(inout)
+-                 : "0"(inout), "r"(data)
+-                 : "memory", "$r5", "$r6", "$r7", "$r8", "$r9", "$r11", "$r1");
++		 : "=r"(inout)
++		 : "0"(inout), "r"(data)
++		 : "memory", "$r5", "$r6", "$r7", "$r8", "$r9", "$r11", "$r1");
+     ret = inout;
+   }
+ #else
+diff --git a/sandbox/linux/services/syscall_wrappers.cc b/sandbox/linux/services/syscall_wrappers.cc
+index f65a1d4ca559f33504353e49c83ed4afc1f0738d..ab81e614531c400a152f9c5c605a5c11f26a95b2 100644
+--- a/sandbox/linux/services/syscall_wrappers.cc
++++ b/sandbox/linux/services/syscall_wrappers.cc
+@@ -58,10 +58,10 @@ long sys_clone(unsigned long flags,
+   if (ctid) MSAN_UNPOISON(ctid, sizeof(*ctid));
+   // See kernel/fork.c in Linux. There is different ordering of sys_clone
+   // parameters depending on CONFIG_CLONE_BACKWARDS* configuration options.
+-#if defined(ARCH_CPU_X86_64) || defined(ARCH_CPU_LOONG64)
++#if defined(ARCH_CPU_X86_64)
+   return syscall(__NR_clone, flags, child_stack, ptid, ctid, tls);
+ #elif defined(ARCH_CPU_X86) || defined(ARCH_CPU_ARM_FAMILY) || \
+-    defined(ARCH_CPU_MIPS_FAMILY)
++    defined(ARCH_CPU_MIPS_FAMILY) || defined(ARCH_CPU_LOONGARCH_FAMILY)
+   // CONFIG_CLONE_BACKWARDS defined.
+   return syscall(__NR_clone, flags, child_stack, ptid, tls, ctid);
+ #endif
+@@ -163,58 +163,13 @@ int sys_sigaction(int signum,
+   return sigaction(signum, act, oldact);
+ }
+ 
+-void statx_to_stat(struct kernel_stat* to, struct kernel_statx* from) {
+-  memset(to, 0, sizeof(struct kernel_stat));
+-  to->st_dev = ((from->stx_dev_minor & 0xff) | (from->stx_dev_major << 8) |
+-                ((from->stx_dev_minor & ~0xff) << 12));
+-  to->st_rdev = ((from->stx_rdev_minor & 0xff) | (from->stx_rdev_major << 8) |
+-                 ((from->stx_rdev_minor & ~0xff) << 12));
+-  to->st_ino = from->stx_ino;
+-  to->st_mode = from->stx_mode;
+-  to->st_nlink = from->stx_nlink;
+-  to->st_uid = from->stx_uid;
+-  to->st_gid = from->stx_gid;
+-  to->st_atime_ = from->stx_atime.tv_sec;
+-  to->st_atime_nsec_ = from->stx_atime.tv_nsec;
+-  to->st_mtime_ = from->stx_mtime.tv_sec;
+-  to->st_mtime_nsec_ = from->stx_mtime.tv_nsec;
+-  to->st_ctime_ = from->stx_ctime.tv_sec;
+-  to->st_ctime_nsec_ = from->stx_ctime.tv_nsec;
+-  to->st_size = from->stx_size;
+-  to->st_blocks = from->stx_blocks;
+-  to->st_blksize = from->stx_blksize;
+-}
+-
+-int sys_statx(int fd,
+-              const char* path,
+-              int flags,
+-              unsigned int mask,
+-              struct kernel_statx* statx_buf) {
+-#if defined(__NR_statx)
+-  int res;
+-  res = syscall(__NR_statx, fd, path, flags, mask, statx_buf);
+-  if (res == 0)
+-    MSAN_UNPOISON(stat_buf, sizeof(*stat_buf));
+-  return res;
+-#else  // defined(__NR_statx)
+-  RAW_CHECK(false);
+-  return -ENOSYS;
+-#endif
+-}
+-
+ int sys_stat(const char* path, struct kernel_stat* stat_buf) {
+   int res;
+-#if !defined(__NR_stat)
+ #if defined(__NR_statx)
+-  kernel_statx statx_buf;
+-  res = sys_statx(AT_FDCWD, path, AT_STATX_SYNC_AS_STAT, STATX_BASIC_STATS,
+-                  &statx_buf);
+-  if (res == 0)
+-    statx_to_stat(stat_buf, &statx_buf);
+-#else  // defined(__NR_statx)
++  res = syscall(__NR_statx, AT_FDCWD, path, 0, STATX_ALL, stat_buf);
++#elif !defined(__NR_stat)
+   res = syscall(__NR_newfstatat, AT_FDCWD, path, stat_buf, 0);
+-#endif
+-#else  //! defined(__NR_stat)
++#else
+   res = syscall(__NR_stat, path, stat_buf);
+ #endif
+   if (res == 0)
+@@ -224,18 +179,11 @@ int sys_stat(const char* path, struct kernel_stat* stat_buf) {
+ 
+ int sys_lstat(const char* path, struct kernel_stat* stat_buf) {
+   int res;
+-#if !defined(__NR_lstat)
+ #if defined(__NR_statx)
+-  kernel_statx statx_buf;
+-  int flag = 0;
+-  flag = AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW;
+-  res = sys_statx(AT_FDCWD, path, flag, STATX_BASIC_STATS, &statx_buf);
+-  if (res == 0)
+-    statx_to_stat(stat_buf, &statx_buf);
+-#else  // defined(__NR_statx)
++  res = syscall(__NR_statx, AT_FDCWD, path, AT_SYMLINK_NOFOLLOW, STATX_ALL, stat_buf);
++#elif !defined(__NR_lstat)
+   res = syscall(__NR_newfstatat, AT_FDCWD, path, stat_buf, AT_SYMLINK_NOFOLLOW);
+-#endif
+-#else  //! defined(__NR_lstat)
++#else
+   res = syscall(__NR_lstat, path, stat_buf);
+ #endif
+   if (res == 0)
+diff --git a/sandbox/linux/services/syscall_wrappers.h b/sandbox/linux/services/syscall_wrappers.h
+index 31b1b0543bb02989758f2736324870d0bb449ff2..a6b22eb5387eb56b7cd524daa1c985483a6f061a 100644
+--- a/sandbox/linux/services/syscall_wrappers.h
++++ b/sandbox/linux/services/syscall_wrappers.h
+@@ -18,7 +18,6 @@ struct rlimit64;
+ struct cap_hdr;
+ struct cap_data;
+ struct kernel_stat;
+-struct kernel_statx;
+ struct kernel_stat64;
+ struct landlock_ruleset_attr;
+ 
+@@ -93,11 +92,6 @@ SANDBOX_EXPORT int sys_sigaction(int signum,
+ // architectures, with the same capabilities as stat() and lstat().
+ SANDBOX_EXPORT int sys_stat(const char* path, struct kernel_stat* stat_buf);
+ SANDBOX_EXPORT int sys_lstat(const char* path, struct kernel_stat* stat_buf);
+-SANDBOX_EXPORT int sys_statx(int fd,
+-                             const char* path,
+-                             int flags,
+-                             unsigned int mask,
+-                             struct kernel_statx* statx_buf);
+ 
+ // Takes care of unpoisoning |stat_buf| for MSAN. Check-fails if fstatat64() is
+ // not a supported syscall on the current platform.
+diff --git a/sandbox/linux/syscall_broker/broker_client.cc b/sandbox/linux/syscall_broker/broker_client.cc
+index 573b62917c050a1f26ae20f64d681448842a434c..848af1020ded70327a9927ab8723af9be985f593 100644
+--- a/sandbox/linux/syscall_broker/broker_client.cc
++++ b/sandbox/linux/syscall_broker/broker_client.cc
+@@ -198,21 +198,6 @@ int BrokerClient::Stat64(const char* pathname,
+                            sizeof(*sb));
+ }
+ 
+-int BrokerClient::Statx(const char* pathname,
+-                        bool follow_links,
+-                        struct kernel_statx* sb) const {
+-  if (!pathname || !sb)
+-    return -EFAULT;
+-
+-  if (fast_check_in_client_ &&
+-      !CommandStatIsSafe(policy_->allowed_command_set, *policy_->file_permissions,
+-                         pathname)) {
+-    return -policy_->file_permissions->denied_errno();
+-  }
+-  return StatFamilySyscall(COMMAND_STATX, pathname, follow_links, sb,
+-                           sizeof(*sb));
+-}
+-
+ int BrokerClient::Unlink(const char* path) const {
+   if (!path)
+     return -EFAULT;
+diff --git a/sandbox/linux/syscall_broker/broker_client.h b/sandbox/linux/syscall_broker/broker_client.h
+index 32efc3f5981f3cf58e4f19e6ef973d4400ef174c..9d0fdee5f3a2cad6bf89bd200f81517547314d5c 100644
+--- a/sandbox/linux/syscall_broker/broker_client.h
++++ b/sandbox/linux/syscall_broker/broker_client.h
+@@ -67,9 +67,6 @@ class SANDBOX_EXPORT BrokerClient : public SyscallDispatcher {
+   int Stat64(const char* pathname,
+              bool follow_links,
+              struct kernel_stat64* sb) const override;
+-  int Statx(const char* pathname,
+-            bool follow_links,
+-            struct kernel_statx* sb) const override;
+   int Unlink(const char* unlink) const override;
+   int InotifyAddWatch(int fd,
+                       const char* pathname,
+diff --git a/sandbox/linux/syscall_broker/broker_host.cc b/sandbox/linux/syscall_broker/broker_host.cc
+index 4fc49d7601097fe2eb084aa88ecdfca0100424cb..7afa8b2395c15a2cfc5cad7c9ee718cd6679665e 100644
+--- a/sandbox/linux/syscall_broker/broker_host.cc
++++ b/sandbox/linux/syscall_broker/broker_host.cc
+@@ -302,22 +302,7 @@ void BrokerHost::StatFileForIPC(BrokerCommand command_type,
+     RAW_CHECK(reply->AddIntToMessage(0));
+     RAW_CHECK(
+         reply->AddDataToMessage(reinterpret_cast<char*>(&sb), sizeof(sb)));
+-#elif defined(__NR_statx)
+-    DCHECK(command_type == COMMAND_STATX);
+-    struct kernel_statx sb;
+-
+-    int sts = sandbox::sys_statx(AT_FDCWD, file_to_access,
+-                                 follow_links ? 0 : AT_SYMLINK_NOFOLLOW,
+-                                 STATX_BASIC_STATS, &sb);
+-    if (sts < 0) {
+-      RAW_CHECK(reply->AddIntToMessage(-errno));
+-      return;
+-    }
+-    RAW_CHECK(reply->AddIntToMessage(0));
+-    RAW_CHECK(
+-        reply->AddDataToMessage(reinterpret_cast<char*>(&sb), sizeof(sb)));
+-
+-#else
++#else  // defined(__NR_fstatat64)
+     // We should not reach here on 64-bit systems, as the *stat*64() are only
+     // necessary on 32-bit.
+     RAW_CHECK(false);
+@@ -456,8 +441,7 @@ bool BrokerHost::HandleRemoteCommand(BrokerSimpleMessage* message,
+       break;
+     }
+     case COMMAND_STAT:
+-    case COMMAND_STAT64:
+-    case COMMAND_STATX: {
++    case COMMAND_STAT64: {
+       const char* requested_filename;
+       if (!message->ReadString(&requested_filename)) {
+         return false;
+diff --git a/sandbox/linux/syscall_broker/broker_process.cc b/sandbox/linux/syscall_broker/broker_process.cc
+index ccc98dbb06def01acbae4b161f5f8c6a393cc616..3c4a3312c62ef6549bce8897ad76cac6c04bab9f 100644
+--- a/sandbox/linux/syscall_broker/broker_process.cc
++++ b/sandbox/linux/syscall_broker/broker_process.cc
+@@ -172,9 +172,6 @@ bool BrokerProcess::IsSyscallBrokerable(int sysno, bool fast_check) const {
+ #endif
+ #if defined(__x86_64__) || defined(__aarch64__)
+     case __NR_newfstatat:
+-#endif
+-#if defined(__NR_statx)
+-    case __NR_statx:
+ #endif
+       return !fast_check || policy_->allowed_command_set.test(COMMAND_STAT);
+ 
+diff --git a/sandbox/linux/syscall_broker/syscall_dispatcher.cc b/sandbox/linux/syscall_broker/syscall_dispatcher.cc
+index 2ed940df4cea93fb4e063c1156fb2f1fc195bbee..a0de94badee68269516ab3800dd238611f9db47d 100644
+--- a/sandbox/linux/syscall_broker/syscall_dispatcher.cc
++++ b/sandbox/linux/syscall_broker/syscall_dispatcher.cc
+@@ -31,8 +31,6 @@ int SyscallDispatcher::DefaultStatForTesting(const char* pathname,
+   return Stat64(pathname, follow_links, sb);
+ #elif defined(__NR_newfstatat)
+   return Stat(pathname, follow_links, sb);
+-#elif defined(__NR_statx)
+-  return Statx(pathname, follow_links, sb);
+ #endif
+ }
+ 
+@@ -176,11 +174,6 @@ int SyscallDispatcher::DispatchSyscall(const arch_seccomp_data& args) {
+       return Stat64(reinterpret_cast<const char*>(args.args[0]), true,
+                     reinterpret_cast<struct kernel_stat64*>(args.args[1]));
+ #endif
+-#if defined(__NR_statx)
+-    case __NR_statx:
+-      return Statx(reinterpret_cast<const char*>(args.args[0]), true,
+-                   reinterpret_cast<struct kernel_statx*>(args.args[1]));
+-#endif
+ #if defined(__NR_lstat)
+     case __NR_lstat:
+       // See https://crbug.com/847096
+diff --git a/sandbox/linux/syscall_broker/syscall_dispatcher.h b/sandbox/linux/syscall_broker/syscall_dispatcher.h
+index 7d0b8e0351a460f906b156b46ae921099b67edcc..906c37d922f46122bfe07503ee4afee156e4e0c2 100644
+--- a/sandbox/linux/syscall_broker/syscall_dispatcher.h
++++ b/sandbox/linux/syscall_broker/syscall_dispatcher.h
+@@ -49,9 +49,6 @@ class SANDBOX_EXPORT SyscallDispatcher {
+   virtual int Stat64(const char* pathname,
+                      bool follow_links,
+                      struct kernel_stat64* sb) const = 0;
+-  virtual int Statx(const char* pathname,
+-                    bool follow_links,
+-                    struct kernel_statx* sb) const = 0;
+ 
+   // Emulates unlink()/unlinkat().
+   virtual int Unlink(const char* unlink) const = 0;
+diff --git a/sandbox/linux/system_headers/linux_signal.h b/sandbox/linux/system_headers/linux_signal.h
+index e3996b0ce8d4b49ca815bb81b0fb7ae8bee98030..5c5eb34d7d4488ae093acca57e4d0ed4691d029e 100644
+--- a/sandbox/linux/system_headers/linux_signal.h
++++ b/sandbox/linux/system_headers/linux_signal.h
+@@ -97,7 +97,6 @@ typedef siginfo_t LinuxSigInfo;
+ struct LinuxSigSet {
+   unsigned long sig[_NSIG_WORDS];
+ };
+-// TODO:LA64 Check this _NSIG_WORDS and LinuxSigAction
+ #elif defined(ARCH_CPU_MIPS_FAMILY) && defined(ARCH_CPU_64_BITS)
+ #if !defined(_NSIG_WORDS)
+ #define _NSIG_WORDS 2
+@@ -105,13 +104,6 @@ struct LinuxSigSet {
+ struct LinuxSigSet {
+   unsigned long sig[_NSIG_WORDS];
+ };
+-#elif defined(ARCH_CPU_LOONG_FAMILY)
+-#if !defined(_NSIG_WORDS)
+-#define _NSIG_WORDS 1
+-#endif
+-struct LinuxSigSet {
+-  unsigned long sig[_NSIG_WORDS];
+-};
+ #else
+ typedef uint64_t LinuxSigSet;
+ #endif
+diff --git a/sandbox/linux/system_headers/linux_stat.h b/sandbox/linux/system_headers/linux_stat.h
+index 5104cea7c80984ef60b5f2afddecf2241399a4e5..8558e81ecf2fae2a30e35c99621c1094b27663f6 100644
+--- a/sandbox/linux/system_headers/linux_stat.h
++++ b/sandbox/linux/system_headers/linux_stat.h
+@@ -150,7 +150,7 @@ struct kernel_stat {
+   int st_blocks;
+   int st_pad4[14];
+ };
+-#elif defined(__aarch64__) || defined(__loongarch_lp64)
++#elif defined(__aarch64__)
+ struct kernel_stat {
+   unsigned long st_dev;
+   unsigned long st_ino;
+@@ -173,15 +173,13 @@ struct kernel_stat {
+   unsigned int __unused4;
+   unsigned int __unused5;
+ };
+-#endif
+-
+-#if defined(__loongarch_lp64)
++#elif defined(__loongarch_lp64)
+ struct kernel_statx_timestamp {
+   long tv_sec;
+   unsigned int tv_nsec;
+   int __reserved;
+ };
+-struct kernel_statx {
++struct kernel_stat {
+   unsigned int stx_mask;
+   unsigned int stx_blksize;
+   unsigned long stx_attributes;
+@@ -204,6 +202,12 @@ struct kernel_statx {
+   unsigned int stx_dev_minor;
+   unsigned long __spare2[14];
+ };
++#define AT_STATX_SYNC_TYPE 0x6000
++#define AT_STATX_SYNC_AS_STAT 0x0000
++#define AT_STATX_FORCE_SYNC 0x2000
++#define AT_STATX_DONT_SYNC 0x4000
++#define STATX_ALL 0x00000fffU
++
+ #endif
+ 
+ #if !defined(AT_EMPTY_PATH)
+@@ -229,28 +233,24 @@ using default_stat_struct = struct kernel_stat64;
+ #define __NR_fstatat_default __NR_fstatat64
+ #define __NR_fstat_default __NR_fstat64
+ 
+-#elif defined(__NR_newfstatat)
++#elif defined(__NR_statx)
+ 
+ namespace sandbox {
+ using default_stat_struct = struct kernel_stat;
+ }  // namespace sandbox
+ 
+-#define __NR_fstatat_default __NR_newfstatat
+-#define __NR_fstat_default __NR_fstat
++#define __NR_statx_default __NR_statx
++#define __NR_fstatat_default __NR_statx
++#define __NR_fstat_default __NR_statx
+ 
+-#elif defined(__NR_statx)
++#elif defined(__NR_newfstatat)
+ 
+ namespace sandbox {
+-using default_stat_struct = struct kernel_statx;
++using default_stat_struct = struct kernel_stat;
+ }  // namespace sandbox
+ 
+-#define AT_STATX_SYNC_TYPE 0x6000
+-#define AT_STATX_SYNC_AS_STAT 0x0000
+-#define AT_STATX_FORCE_SYNC 0x2000
+-#define AT_STATX_DONT_SYNC 0x4000
+-#define STATX_ALL 0x00000fffU
+-
+-#define __NR_statx_default __NR_statx
++#define __NR_fstatat_default __NR_newfstatat
++#define __NR_fstat_default __NR_fstat
+ 
+ #else
+ #error "one of fstatat64 and newfstatat must be defined"
+diff --git a/sandbox/policy/linux/sandbox_linux.cc b/sandbox/policy/linux/sandbox_linux.cc
+index 9ac0809dc9ddc27a0a93e2be221f8858f551150f..acc5db3df9d0a6e4b37f7afbb6118e4e85bda420 100644
+--- a/sandbox/policy/linux/sandbox_linux.cc
++++ b/sandbox/policy/linux/sandbox_linux.cc
+@@ -595,19 +595,21 @@ bpf_dsl::ResultExpr SandboxLinux::HandleViaBroker(int sysno) const {
+   const bpf_dsl::ResultExpr handle_via_broker =
+       bpf_dsl::Trap(syscall_broker::BrokerClient::SIGSYS_Handler,
+                     broker_process_->GetBrokerClientSignalBased());
+-#if defined(__loongarch_lp64) && defined(__NR_statx_default)
+-  if (sysno == __NR_statx_default) {
+-#else
+   if (sysno == __NR_fstatat_default) {
+-#endif
+     // This may be an fstatat(fd, "", stat_buf, AT_EMPTY_PATH), which should be
+     // rewritten as fstat(fd, stat_buf). This should be consistent with how the
+     // baseline policy handles fstatat().
+     // Note that this will cause some legitimate but strange invocations of
+     // fstatat() to fail, see https://crbug.com/1243290#c8 for details.
++#if defined(__NR_statx)
++    const bpf_dsl::Arg<int> flags(2);
++    return bpf_dsl::If((flags & AT_EMPTY_PATH) == AT_EMPTY_PATH,
++		       RewriteStatxSIGSYS(BPFBasePolicy::GetFSDeniedErrno()))
++#else
+     const bpf_dsl::Arg<int> flags(3);
+     return bpf_dsl::If((flags & AT_EMPTY_PATH) == AT_EMPTY_PATH,
+                        RewriteFstatatSIGSYS(BPFBasePolicy::GetFSDeniedErrno()))
++#endif
+         .Else(handle_via_broker);
+   } else {
+     return handle_via_broker;
