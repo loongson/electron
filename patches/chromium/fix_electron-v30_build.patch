@@ -1,0 +1,120 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mingtao Zhou <zhoumingtao@loongson.cn>
+Date: Thu, 28 Mar 2024 11:29:39 +0800
+Subject: fix electron-v30 build
+
+support enable_rust
+
+diff --git a/build/build_config.h b/build/build_config.h
+index 6712da95d1c96793b0a4c49c5a86a0a3d4a6022a..26216d6a92e2838bfceb718f85b5e1062f68eea7 100644
+--- a/build/build_config.h
++++ b/build/build_config.h
+@@ -357,9 +357,11 @@
+ #endif
+ #elif defined(__loongarch__)
+ #define ARCH_CPU_LOONGARCH_FAMILY 1
++#define ARCH_CPU_LOONG_FAMILY 1
+ #define ARCH_CPU_LITTLE_ENDIAN 1
+ #if __loongarch_grlen == 64
+ #define ARCH_CPU_LOONGARCH64 1
++#define ARCH_CPU_LOONG64 1
+ #define ARCH_CPU_64_BITS 1
+ #else
+ #define ARCH_CPU_LOONGARCH32 1
+diff --git a/build/config/clang/BUILD.gn b/build/config/clang/BUILD.gn
+index 1a3a7e5440f027899ad52ab64367bdca3851e282..a2a5d464e51008cfe7fdc4e7301ae0985f5b176a 100644
+--- a/build/config/clang/BUILD.gn
++++ b/build/config/clang/BUILD.gn
+@@ -175,6 +175,8 @@ template("clang_lib") {
+           _dir = "armv7-unknown-linux-gnueabihf"
+         } else if (current_cpu == "arm64") {
+           _dir = "aarch64-unknown-linux-gnu"
++        } else if (current_cpu == "loong64") {
++          _dir = "loongarch64-unknown-linux-gnu"
+         } else {
+           assert(false)  # Unhandled cpu type
+         }
+diff --git a/build/config/compiler/BUILD.gn b/build/config/compiler/BUILD.gn
+index 6efe967eb0a1cfd71f5d85209bcc9b0d90c5b4c0..d6fd6942b361511752ccd3038aad8a0338f54817 100644
+--- a/build/config/compiler/BUILD.gn
++++ b/build/config/compiler/BUILD.gn
+@@ -1448,6 +1448,7 @@ config("compiler_cpu_abi") {
+         "-mabi=lp64d",
+         "-mcmodel=medium",
+       ]
++      rustflags = [ "-Ccode-model=large" ]
+     } else if (current_cpu == "s390x") {
+       cflags += [ "-m64" ]
+       ldflags += [ "-m64" ]
+@@ -1733,9 +1734,9 @@ config("treat_warnings_as_errors") {
+ # subconfig of both chromium_code and no_chromium_code.  This way these
+ # flags are guaranteed to appear on the compile command line after -Wall.
+ config("default_warnings") {
+-  cflags = []
+-  cflags_c = []
+-  cflags_cc = []
++  cflags = [ "-Wno-c++11-narrowing-const-reference" ]
++  cflags_c = [ "-Wno-c++11-narrowing-const-reference" ]
++  cflags_cc = [ "-Wno-c++11-narrowing-const-reference" ]
+   ldflags = []
+   configs = []
+ 
+diff --git a/build/config/rust.gni b/build/config/rust.gni
+index e99d7d08e1c1b8e951e04e6c2ee646267e6779d6..47cd0d35ef3eee89343d67228ad65b75f5674d05 100644
+--- a/build/config/rust.gni
++++ b/build/config/rust.gni
+@@ -194,6 +194,8 @@ if (is_linux || is_chromeos) {
+     rust_abi_target = "i686-unknown-linux-gnu"
+   } else if (current_cpu == "x64") {
+     rust_abi_target = "x86_64-unknown-linux-gnu"
++  } else if (current_cpu == "loong64") {
++    rust_abi_target = "loongarch64-unknown-linux-gnu"
+   } else if (current_cpu == "arm") {
+     if (arm_float_abi == "hard") {
+       float_suffix = "hf"
+@@ -294,6 +296,8 @@ if (current_cpu == "x86") {
+   rust_target_arch = "powerpc64"
+ } else if (current_cpu == "riscv64") {
+   rust_target_arch = "riscv64"
++} else if (current_cpu == "loong64") {
++  rust_target_arch = "loongarch64"
+ }
+ 
+ assert(!toolchain_has_rust || rust_target_arch != "")
+diff --git a/build/toolchain/toolchain.gni b/build/toolchain/toolchain.gni
+index 14aa5f76d311b201f8cebb3eb53bf5484215bbd3..9f9f302c3f1e3b65c462c7840c5d2f348565f659 100644
+--- a/build/toolchain/toolchain.gni
++++ b/build/toolchain/toolchain.gni
+@@ -47,7 +47,7 @@ declare_args() {
+   if (llvm_android_mainline) {  # https://crbug.com/1481060
+     clang_version = "17"
+   } else {
+-    clang_version = "19"
++    clang_version = "18"
+   }
+ }
+ 
+diff --git a/extensions/common/api/runtime.json b/extensions/common/api/runtime.json
+index 8ef6343b3fd4fdb8aa95971fbb3c2dfa9850c1da..e16f91eefce973ef52c2d3cb7c8ed877c7407d02 100644
+--- a/extensions/common/api/runtime.json
++++ b/extensions/common/api/runtime.json
+@@ -98,7 +98,8 @@
+             {"name": "x86-32", "description": "Specifies the processer architecture as x86-32."},
+             {"name": "x86-64", "description": "Specifies the processer architecture as x86-64."},
+             {"name": "mips", "description": "Specifies the processer architecture as mips."},
+-            {"name": "mips64", "description": "Specifies the processer architecture as mips64."}
++            {"name": "mips64", "description": "Specifies the processer architecture as mips64."},
++            {"name": "mips64el", "description": "Specifies the processer architecture as mips64el."},
+             {"name": "loong64", "description": "Specifies the processer architecture as loong64."}
+          ],
+         "description": "The machine's processor architecture."
+@@ -112,7 +113,8 @@
+           {"name": "x86-32", "description": "Specifies the native client architecture as x86-32."},
+           {"name": "x86-64", "description": "Specifies the native client architecture as x86-64."},
+           {"name": "mips", "description": "Specifies the native client architecture as mips."},
+-          {"name": "mips64", "description": "Specifies the native client architecture as mips64."}
++          {"name": "mips64", "description": "Specifies the native client architecture as mips64."},
++          {"name": "mips64el", "description": "Specifies the native client architecture as mips64el."},
+           {"name": "loong64", "description": "Specifies the native client architecture as loong64."}
+         ]
+       },
