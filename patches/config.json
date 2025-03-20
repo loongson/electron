@@ -13,5 +13,6 @@
   { "patch_dir": "src/electron/patches/webrtc", "repo": "src/third_party/webrtc" },
   { "patch_dir": "src/electron/patches/breakpad", "repo": "src/third_party/breakpad/breakpad" },
   { "patch_dir": "src/electron/patches/lss", "repo": "src/third_party/lss" },
+  { "patch_dir": "src/electron/patches/swiftshader", "repo": "src/third_party/swiftshader" },
   { "patch_dir": "src/electron/patches/reclient-configs", "repo": "src/third_party/engflow-reclient-configs" }
 ]
