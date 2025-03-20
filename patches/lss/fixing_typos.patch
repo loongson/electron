@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andreas Deininger <adeininger@urbanonline.de>
+Date: Fri, 30 Sep 2022 18:13:22 +0200
+Subject: Fixing typos
+
+Change-Id: I63cb1547093e0de679a08aa9834b67077606bca8
+Reviewed-on: https://chromium-review.googlesource.com/c/linux-syscall-support/+/3925692
+Reviewed-by: Mike Frysinger <vapier@chromium.org>
+
+diff --git a/linux_syscall_support.h b/linux_syscall_support.h
+index c9ae154fc35018307333985defd3120f2a7f2947..6dc588846b7f6874f180e00db54be918123fde63 100644
+--- a/linux_syscall_support.h
++++ b/linux_syscall_support.h
+@@ -46,7 +46,7 @@
+  *   the necessary definitions.
+  *
+  * SYS_ERRNO:
+- *   All system calls will update "errno" unless overriden by setting the
++ *   All system calls will update "errno" unless overridden by setting the
+  *   SYS_ERRNO macro prior to including this file. SYS_ERRNO should be
+  *   an l-value.
+  *
+@@ -1823,7 +1823,7 @@ struct kernel_statx {
+ #ifndef __NR_getcpu
+ #define __NR_getcpu             302
+ #endif
+-/* End of powerpc defininitions                                              */
++/* End of powerpc definitions                                              */
+ #elif defined(__s390__)
+ #ifndef __NR_quotactl
+ #define __NR_quotactl           131
+diff --git a/tests/getitimer.c b/tests/getitimer.c
+index 8a8470021e69f9988f844506be3ef5e9970f14d4..860538a0fbeae9c4bbfd27caa68eb2ea354b01d6 100644
+--- a/tests/getitimer.c
++++ b/tests/getitimer.c
+@@ -31,7 +31,7 @@
+ 
+ int main(int argc, char *argv[]) {
+   // We need an invalid timer value. The assert()'s below should
+-  // be static asserts but it is not avalible in older C versions.
++  // be static asserts but it is not available in older C versions.
+ #define kInvalidTimer 9999
+   assert(kInvalidTimer != ITIMER_REAL);
+   assert(kInvalidTimer != ITIMER_VIRTUAL);
